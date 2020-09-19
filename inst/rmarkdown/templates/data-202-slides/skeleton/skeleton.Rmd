@@ -1,5 +1,5 @@
 ---
-title: "Lab"
+title: "TITLE HERE"
 author: "K Arnold"
 output:
   xaringan::moon_reader:
