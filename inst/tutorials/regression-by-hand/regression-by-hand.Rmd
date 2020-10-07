@@ -77,11 +77,33 @@ coef_lot_area <- .1
 data2_augmented <- data2 # Your code here
 ```
 
-```{r add-prediction-solution, exercise=TRUE}
+```{r add-prediction-solution}
 intercept = 125000
 coef_lot_area <- .1
 
 data2_augmented <- data2 %>%
-  mutate(predicted = intercept + coef_lot_area * Lot_Area)
+  mutate(predicted = intercept + coef_lot_area * Lot_Area,
+         residual = Sale_Price - predicted)
+```
+
+Now, write code that uses `data2_augmented` to compute the
+*mean error* (bias), *mean absolute error*, and *mean squared error*. Use `summarize`.
+
+```{r summarize_error, exercise=TRUE}
+data2_augmented %>% 
+  summarize(
+    mean_error = 0, # your code here
+    mean_absolute_error = 0, # etc.
+    mean_squared_error = 0
+  )
+```
+
+```{r summarize-error-solution}
+data2_augmented %>% 
+  summarize(
+    mean_error = mean(residual),
+    mean_absolute_error = mean(abs(residual)),
+    mean_squared_error = mean(residual * residual)
+  )
 ```
 
