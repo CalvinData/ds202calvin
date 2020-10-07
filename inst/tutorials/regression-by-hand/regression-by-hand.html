@@ -168,20 +168,38 @@ coef_lot_area &lt;- .1
 data2_augmented &lt;- data2 # Your code here</code></pre>
 <script type="application/json" data-opts-chunk="1">{"fig.width":6.5,"fig.height":4,"fig.retina":2,"fig.align":"default","fig.keep":"high","fig.show":"asis","out.width":624,"warning":true,"error":false,"message":true,"exercise.df_print":"paged","exercise.checker":"NULL"}</script>
 </div>
-<div class="tutorial-exercise" data-label="add-prediction-solution" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<div class="tutorial-exercise-support" data-label="add-prediction-solution" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
 <pre class="text"><code>intercept = 125000
 coef_lot_area &lt;- .1
 
 data2_augmented &lt;- data2 %&gt;%
-  mutate(predicted = intercept + coef_lot_area * Lot_Area)</code></pre>
+  mutate(predicted = intercept + coef_lot_area * Lot_Area,
+         residual = Sale_Price - predicted)</code></pre>
+</div>
+<p>Now, write code that uses <code>data2_augmented</code> to compute the <em>mean error</em> (bias), <em>mean absolute error</em>, and <em>mean squared error</em>. Use <code>summarize</code>.</p>
+<div class="tutorial-exercise" data-label="summarize-error" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<pre class="text"><code>data2_augmented %&gt;% 
+  summarize(
+    mean_error = 0, # your code here
+    mean_absolute_error = 0, # etc.
+    mean_squared_error = 0
+  )</code></pre>
 <script type="application/json" data-opts-chunk="1">{"fig.width":6.5,"fig.height":4,"fig.retina":2,"fig.align":"default","fig.keep":"high","fig.show":"asis","out.width":624,"warning":true,"error":false,"message":true,"exercise.df_print":"paged","exercise.checker":"NULL"}</script>
+</div>
+<div class="tutorial-exercise-support" data-label="summarize-error-solution" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<pre class="text"><code>data2_augmented %&gt;% 
+  summarize(
+    mean_error = mean(residual),
+    mean_absolute_error = mean(abs(residual)),
+    mean_squared_error = mean(residual * residual)
+  )</code></pre>
 </div>
 
 <script type="application/shiny-prerendered" data-context="server-start">
 library(learnr)
 options(dplyr.summarise.inform = FALSE)
 library(tidyverse)
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
 </script>
  
 <script type="application/shiny-prerendered" data-context="server">
@@ -223,9 +241,9 @@ output$`tutorial-exercise-add-prediction-output` <- renderUI({
 </script>
  
 <script type="application/shiny-prerendered" data-context="server">
-`tutorial-exercise-add-prediction-solution-result` <- learnr:::setup_exercise_handler(reactive(req(input$`tutorial-exercise-add-prediction-solution-code-editor`)), session)
-output$`tutorial-exercise-add-prediction-solution-output` <- renderUI({
-  `tutorial-exercise-add-prediction-solution-result`()
+`tutorial-exercise-summarize-error-result` <- learnr:::setup_exercise_handler(reactive(req(input$`tutorial-exercise-summarize-error-code-editor`)), session)
+output$`tutorial-exercise-summarize-error-output` <- renderUI({
+  `tutorial-exercise-summarize-error-result`()
 })
 </script>
  <!--html_preserve-->

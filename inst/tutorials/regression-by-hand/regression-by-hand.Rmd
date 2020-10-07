@@ -14,7 +14,7 @@ runtime: shiny_prerendered
 library(learnr)
 options(dplyr.summarise.inform = FALSE)
 library(tidyverse)
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
 ```
 
 # Small data
@@ -89,7 +89,7 @@ data2_augmented <- data2 %>%
 Now, write code that uses `data2_augmented` to compute the
 *mean error* (bias), *mean absolute error*, and *mean squared error*. Use `summarize`.
 
-```{r summarize_error, exercise=TRUE}
+```{r summarize-error, exercise=TRUE}
 data2_augmented %>% 
   summarize(
     mean_error = 0, # your code here
