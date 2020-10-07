@@ -1,0 +1,12 @@
+name: prediction-error
+title:
+username: ka37
+account: ka37
+server: rsconnect.calvin.edu
+hostUrl: https://rsconnect.calvin.edu:3939/__api__
+appId: 111
+bundleId: 255
+url: https://rsconnect.calvin.edu:3939/content/111/
+when: 1602074691.35137
+asMultiple: FALSE
+asStatic: FALSE
