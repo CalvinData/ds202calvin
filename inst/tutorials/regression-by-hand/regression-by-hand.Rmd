@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
 
 We'll start by using a tiny subset of the home sale dataset.
 
-```{r echo=TRUE}
+```{r subset-data, echo=TRUE, eval=TRUE}
 ames <- AmesHousing::make_ames()
 data1 <- ames %>% slice_head(n = 2) %>% select(Lot_Area, Sale_Price)
 ```
