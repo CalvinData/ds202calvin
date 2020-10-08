@@ -12,9 +12,15 @@ runtime: shiny_prerendered
 
 ```{r setup, include=FALSE}
 library(learnr)
+library(shiny)
 options(dplyr.summarise.inform = FALSE)
 library(tidyverse)
 knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
+ames <- AmesHousing::make_ames()
+data1 <- ames %>% slice_head(n = 2) %>% select(Lot_Area, Sale_Price)
+data2 <- ames %>% slice_head(n = 3)
+min_intercept <- 0
+max_intercept <- 250000
 ```
 
 # Small data
@@ -22,38 +28,49 @@ knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
 We'll start by using a tiny subset of the home sale dataset.
 
 ```{r subset-data, echo=TRUE, eval=TRUE}
-ames <- AmesHousing::make_ames()
-data1 <- ames %>% slice_head(n = 2) %>% select(Lot_Area, Sale_Price)
+data1
 ```
 
 ## Intercept only
 
 Adjust the value of "intercept" to make your line give the best prediction.
 
-```{r plot-one-coef, exercise=TRUE, exercise.setup="subset-data"}
-intercept <- 125000
+```{r, echo=FALSE}
+sliderInput("intercept", "Intercept", min = min_intercept, max = max_intercept, value = 125000)
+plotOutput("plot_intercept_only")
+```
 
-ggplot(data1, aes(x = Lot_Area, y = Sale_Price)) +
-  geom_point() +
-  geom_abline(intercept = intercept, slope = 0)
+```{r context="server"}
+output$plot_intercept_only <- renderPlot({
+  intercept <- input$intercept
+  ggplot(data1, aes(x = Lot_Area, y = Sale_Price)) +
+    geom_point() +
+    geom_abline(intercept = intercept, slope = 0)
+})
 ```
 
 Now, adjust both "intercept" and "coef_lot_area".
 
-```{r plot_two_coef, exercise=TRUE, exercise.setup="subset-data"}
-intercept = 125000
-coef_lot_area <- .1
-
-ggplot(data1, aes(x = Lot_Area, y = Sale_Price)) +
-  geom_point() +
-  geom_abline(intercept = intercept, slope = coef_lot_area)
+```{r, echo=FALSE}
+sliderInput("intercept2", "Intercept", min = min_intercept, max = max_intercept, value = 125000)
+sliderInput("coef_lot_area", "Lot_Area", min = -10, max = 10, value = 0, step = .1)
+plotOutput("plot_one_coef")
 ```
 
+```{r context="server"}
+output$plot_one_coef <- renderPlot({
+  intercept <- input$intercept2
+  coef_lot_area <- input$coef_lot_area
+  ggplot(data1, aes(x = Lot_Area, y = Sale_Price)) +
+    geom_point() +
+    geom_abline(intercept = intercept, slope = coef_lot_area)
+})
+```
 
 # More data!
 
 ```{r subset-data-2, exercise.setup="subset-data"}
-data2 <- ames %>% slice_head(n = 3)
+data2
 ```
 
 ```{r plot_two_coef_data2, exercise=TRUE, exercise.setup="subset-data-2"}
