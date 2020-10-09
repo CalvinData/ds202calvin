@@ -16,11 +16,12 @@ library(shiny)
 options(dplyr.summarise.inform = FALSE)
 library(tidyverse)
 knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
-ames <- AmesHousing::make_ames()
-data1 <- ames %>% slice_head(n = 2) %>% select(Lot_Area, Sale_Price)
-data2 <- ames %>% slice_head(n = 3)
+ames <- AmesHousing::make_ames() %>%
+  mutate(Sale_Price = Sale_Price / 1000)
+data1 <- ames %>% slice_head(n = 3) %>% select(Lot_Area, Sale_Price) %>% mutate(across(everything(), as.numeric))
+data2 <- ames %>% slice_head(n = 3) %>% select(Lot_Area, Bsmt_Unf_SF, Sale_Price) %>% mutate(across(everything(), as.numeric))
 min_intercept <- 0
-max_intercept <- 250000
+max_intercept <- 250
 ```
 
 # Small data
@@ -31,13 +32,19 @@ We'll start by using a tiny subset of the home sale dataset.
 data1
 ```
 
+```{r}
+summary(data1)
+```
+
+
 ## Intercept only
 
 Adjust the value of "intercept" to make your line give the best prediction.
 
 ```{r, echo=FALSE}
-sliderInput("intercept", "Intercept", min = min_intercept, max = max_intercept, value = 125000)
+sliderInput("intercept", "Intercept", min = min_intercept, max = max_intercept, value = 125)
 plotOutput("plot_intercept_only")
+tableOutput("error_intercept_only")
 ```
 
 ```{r context="server"}
@@ -47,12 +54,34 @@ output$plot_intercept_only <- renderPlot({
     geom_point() +
     geom_abline(intercept = intercept, slope = 0)
 })
+output$error_intercept_only <- renderTable({
+  intercept <- input$intercept
+  data1 %>% 
+    mutate(prediction = intercept, residual = Sale_Price - prediction) %>% 
+    summarize(
+      mean_error = mean(residual),
+      mean_absolute_error = mean(abs(residual)),
+      max_abs_error = max(abs(residual)),
+      mean_squared_error = mean(residual * residual)
+    )
+})
 ```
+
+```{r lowest-mae}
+question("We get the lowest Mean Absolute Error when we set the intercept to the ___ of the Sale_Price column (see summary table above)",
+         answer("minimum"),
+         answer("mean"),
+         answer("median", correct = TRUE),
+         answer("maximum"),
+         incorrect = "Try changing the intercept to each of these options and see what error you get!",
+         allow_retry = TRUE)
+```
+
 
 Now, adjust both "intercept" and "coef_lot_area".
 
 ```{r, echo=FALSE}
-sliderInput("intercept2", "Intercept", min = min_intercept, max = max_intercept, value = 125000)
+sliderInput("intercept2", "Intercept", min = min_intercept, max = max_intercept, value = 125)
 sliderInput("coef_lot_area", "Lot_Area", min = -10, max = 10, value = 0, step = .1)
 plotOutput("plot_one_coef")
 ```
@@ -74,7 +103,7 @@ data2
 ```
 
 ```{r plot_two_coef_data2, exercise=TRUE, exercise.setup="subset-data-2"}
-intercept = 125000
+intercept = 125
 coef_lot_area <- .1
 
 ggplot(data2, aes(x = Lot_Area, y = Sale_Price)) +
@@ -88,14 +117,14 @@ Write code here to add a `prediction` and `residual` column to `data2`.
 Make sure that you use the correct sign for *residual*.
 
 ```{r add-prediction, exercise=TRUE, exercise.setup="subset-data-2"}
-intercept = 125000
+intercept = 125
 coef_lot_area <- .1
 
 data2_augmented <- data2 # Your code here
 ```
 
 ```{r add-prediction-solution, exercise.setup="subset-data-2"}
-intercept = 125000
+intercept = 125
 coef_lot_area <- .1
 
 data2_augmented <- data2 %>%

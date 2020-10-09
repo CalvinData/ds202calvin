@@ -124,17 +124,32 @@ $(document).ready(function () {
 <div class="tutorial-exercise-support" data-label="subset-data" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
 <pre class="text"><code>data1</code></pre>
 </div>
+<pre><code>##     Lot_Area       Sale_Price   
+##  Min.   :11622   Min.   :105.0  
+##  1st Qu.:12944   1st Qu.:138.5  
+##  Median :14267   Median :172.0  
+##  Mean   :19220   Mean   :164.0  
+##  3rd Qu.:23018   3rd Qu.:193.5  
+##  Max.   :31770   Max.   :215.0</code></pre>
 <div id="section-intercept-only" class="section level2">
 <h2>Intercept only</h2>
 <p>Adjust the value of “intercept” to make your line give the best prediction.</p>
 <p><div class="form-group shiny-input-container">
 <label class="control-label" for="intercept">Intercept</label>
-<input class="js-range-slider" id="intercept" data-min="0" data-max="250000" data-from="125000" data-step="1" data-grid="true" data-grid-num="10" data-grid-snap="false" data-prettify-separator="," data-prettify-enabled="true" data-keyboard="true" data-data-type="number"/>
-</div><div id="plot_intercept_only" class="shiny-plot-output" style="width: 100% ; height: 400px"></div></p>
+<input class="js-range-slider" id="intercept" data-min="0" data-max="250" data-from="125" data-step="1" data-grid="true" data-grid-num="10" data-grid-snap="false" data-prettify-separator="," data-prettify-enabled="true" data-keyboard="true" data-data-type="number"/>
+</div><div id="plot_intercept_only" class="shiny-plot-output" style="width: 100% ; height: 400px"></div><div id="error_intercept_only" class="shiny-html-output"></div></p>
+<div class="panel panel-default">
+<div data-label="lowest-mae" class="tutorial-question panel-body">
+<div id="lowest-mae-answer_container" class="shiny-html-output"></div>
+<div id="lowest-mae-message_container" class="shiny-html-output"></div>
+<div id="lowest-mae-action_button_container" class="shiny-html-output"></div>
+<script>if (Tutorial.triggerMathJax) Tutorial.triggerMathJax()</script>
+</div>
+</div>
 <p>Now, adjust both “intercept” and “coef_lot_area”.</p>
 <p><div class="form-group shiny-input-container">
 <label class="control-label" for="intercept2">Intercept</label>
-<input class="js-range-slider" id="intercept2" data-min="0" data-max="250000" data-from="125000" data-step="1" data-grid="true" data-grid-num="10" data-grid-snap="false" data-prettify-separator="," data-prettify-enabled="true" data-keyboard="true" data-data-type="number"/>
+<input class="js-range-slider" id="intercept2" data-min="0" data-max="250" data-from="125" data-step="1" data-grid="true" data-grid-num="10" data-grid-snap="false" data-prettify-separator="," data-prettify-enabled="true" data-keyboard="true" data-data-type="number"/>
 </div><div class="form-group shiny-input-container">
 <label class="control-label" for="coef_lot_area">Lot_Area</label>
 <input class="js-range-slider" id="coef_lot_area" data-min="-10" data-max="10" data-from="0" data-step="0.1" data-grid="true" data-grid-num="10" data-grid-snap="false" data-prettify-separator="," data-prettify-enabled="true" data-keyboard="true" data-data-type="number"/>
@@ -147,7 +162,7 @@ $(document).ready(function () {
 <pre class="text"><code>data2</code></pre>
 </div>
 <div class="tutorial-exercise" data-label="plot_two_coef_data2" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
-<pre class="text"><code>intercept = 125000
+<pre class="text"><code>intercept = 125
 coef_lot_area &lt;- .1
 
 ggplot(data2, aes(x = Lot_Area, y = Sale_Price)) +
@@ -160,14 +175,14 @@ ggplot(data2, aes(x = Lot_Area, y = Sale_Price)) +
 <h1>Evaluate error</h1>
 <p>Write code here to add a <code>prediction</code> and <code>residual</code> column to <code>data2</code>. Make sure that you use the correct sign for <em>residual</em>.</p>
 <div class="tutorial-exercise" data-label="add-prediction" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
-<pre class="text"><code>intercept = 125000
+<pre class="text"><code>intercept = 125
 coef_lot_area &lt;- .1
 
 data2_augmented &lt;- data2 # Your code here</code></pre>
 <script type="application/json" data-opts-chunk="1">{"fig.width":6.5,"fig.height":4,"fig.retina":2,"fig.align":"default","fig.keep":"high","fig.show":"asis","out.width":624,"warning":true,"error":false,"message":true,"exercise.df_print":"paged","exercise.setup":"subset-data-2","exercise.checker":"NULL"}</script>
 </div>
 <div class="tutorial-exercise-support" data-label="add-prediction-solution" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
-<pre class="text"><code>intercept = 125000
+<pre class="text"><code>intercept = 125
 coef_lot_area &lt;- .1
 
 data2_augmented &lt;- data2 %&gt;%
@@ -199,11 +214,12 @@ library(shiny)
 options(dplyr.summarise.inform = FALSE)
 library(tidyverse)
 knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
-ames <- AmesHousing::make_ames()
-data1 <- ames %>% slice_head(n = 2) %>% select(Lot_Area, Sale_Price)
-data2 <- ames %>% slice_head(n = 3)
+ames <- AmesHousing::make_ames() %>%
+  mutate(Sale_Price = Sale_Price / 1000)
+data1 <- ames %>% slice_head(n = 3) %>% select(Lot_Area, Sale_Price) %>% mutate(across(everything(), as.numeric))
+data2 <- ames %>% slice_head(n = 3) %>% select(Lot_Area, Bsmt_Unf_SF, Sale_Price) %>% mutate(across(everything(), as.numeric))
 min_intercept <- 0
-max_intercept <- 250000
+max_intercept <- 250
 </script>
  
 <script type="application/shiny-prerendered" data-context="server">
@@ -223,6 +239,21 @@ output$plot_intercept_only <- renderPlot({
     geom_point() +
     geom_abline(intercept = intercept, slope = 0)
 })
+output$error_intercept_only <- renderTable({
+  intercept <- input$intercept
+  data1 %>% 
+    mutate(prediction = intercept, residual = Sale_Price - prediction) %>% 
+    summarize(
+      mean_error = mean(residual),
+      mean_absolute_error = mean(abs(residual)),
+      max_abs_error = max(abs(residual)),
+      mean_squared_error = mean(residual * residual)
+    )
+})
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+learnr:::question_prerendered_chunk(structure(list(type = "learnr_radio", label = "lowest-mae", question = structure("We get the lowest Mean Absolute Error when we set the intercept to the ___ of the Sale_Price column (see summary table above)", html = TRUE, class = c("html", "character")), answers = list(structure(list(id = "lnr_ans_165c765",     option = "minimum", value = "minimum", label = structure("minimum", html = TRUE, class = c("html",     "character")), correct = FALSE, message = NULL), class = c("tutorial_question_answer", "tutorial_quiz_answer")), structure(list(id = "lnr_ans_fc025b6",     option = "mean", value = "mean", label = structure("mean", html = TRUE, class = c("html",     "character")), correct = FALSE, message = NULL), class = c("tutorial_question_answer", "tutorial_quiz_answer")), structure(list(id = "lnr_ans_4994c0f",     option = "median", value = "median", label = structure("median", html = TRUE, class = c("html",     "character")), correct = TRUE, message = NULL), class = c("tutorial_question_answer", "tutorial_quiz_answer")), structure(list(id = "lnr_ans_2af2f38",     option = "maximum", value = "maximum", label = structure("maximum", html = TRUE, class = c("html",     "character")), correct = FALSE, message = NULL), class = c("tutorial_question_answer", "tutorial_quiz_answer"))), button_labels = list(submit = structure("Submit Answer", html = TRUE, class = c("html", "character")), try_again = structure("Try Again", html = TRUE, class = c("html", "character"))), messages = list(correct = structure("Correct!", html = TRUE, class = c("html", "character")), try_again = structure("Try one of the other ones!", html = TRUE, class = c("html", "character")), incorrect = structure("Try one of the other ones!", html = TRUE, class = c("html", "character")), message = NULL, post_message = NULL), ids = list(    answer = "lowest-mae-answer", question = "lowest-mae"), loading = structure("<strong>Loading:<\u002fstrong> \nWe get the lowest Mean Absolute Error when we set the intercept to the ___ of the Sale_Price column (see summary table above)\n<br/><br/><br/>", html = TRUE, class = c("html", "character")), random_answer_order = FALSE, allow_retry = TRUE,     seed = 621891330.710409, options = list()), class = c("learnr_radio", "tutorial_question")))
 </script>
  
 <script type="application/shiny-prerendered" data-context="server">
@@ -262,7 +293,7 @@ output$`tutorial-exercise-summarize-error-output` <- renderUI({
 <!--/html_preserve-->
 <!--html_preserve-->
 <script type="application/shiny-prerendered" data-context="execution_dependencies">
-{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages","version"]},"class":{"type":"character","attributes":{},"value":["data.frame"]},"row.names":{"type":"integer","attributes":{},"value":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78]}},"value":[{"type":"character","attributes":{},"value":["AmesHousing","assertthat","backports","base","blob","broom","cellranger","cli","colorspace","compiler","crayon","datasets","DBI","dbplyr","digest","dplyr","ellipsis","evaluate","fansi","fastmap","forcats","fs","generics","ggplot2","glue","graphics","grDevices","grid","gtable","haven","hms","htmltools","htmlwidgets","httpuv","httr","jsonlite","knitr","later","learnr","lifecycle","lubridate","magrittr","markdown","methods","mime","modelr","munsell","pillar","pkgconfig","promises","purrr","R6","Rcpp","readr","readxl","reprex","rlang","rmarkdown","rprojroot","rstudioapi","rvest","scales","shiny","stats","stringi","stringr","tibble","tidyr","tidyselect","tidyverse","tools","utils","vctrs","withr","xfun","xml2","xtable","yaml"]},{"type":"character","attributes":{},"value":["0.0.4","0.2.1","1.1.9","4.0.2","1.2.1","0.7.0","1.1.0","2.0.2","1.4-1","4.0.2","1.3.4","4.0.2","1.1.0","1.4.4","0.6.25","1.0.2","0.3.1","0.14","0.4.1","1.0.1","0.5.0","1.5.0","0.0.2","3.3.2","1.4.2","4.0.2","4.0.2","4.0.2","0.3.0","2.3.1","0.5.3","0.5.0","1.5.1","1.5.4","1.4.2","1.7.0","1.30","1.1.0.1","0.10.1","0.2.0","1.7.9","1.5","1.1","4.0.2","0.9","0.1.8","0.5.0","1.4.6","2.0.3","1.1.1","0.3.4","2.4.1","1.0.5","1.3.1","1.3.1","0.3.0","0.4.7","2.4","1.3-2","0.11","0.3.6","1.1.1","1.5.0","4.0.2","1.4.6","1.4.0","3.0.3","1.1.1","1.1.0","1.3.0","4.0.2","4.0.2","0.3.4","2.2.0","0.16","1.3.2","1.8-4","2.2.1"]}]}]}
+{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages","version"]},"class":{"type":"character","attributes":{},"value":["data.frame"]},"row.names":{"type":"integer","attributes":{},"value":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79]}},"value":[{"type":"character","attributes":{},"value":["AmesHousing","assertthat","backports","base","blob","broom","cellranger","checkmate","cli","colorspace","compiler","crayon","datasets","DBI","dbplyr","digest","dplyr","ellipsis","evaluate","fansi","fastmap","forcats","fs","generics","ggplot2","glue","graphics","grDevices","grid","gtable","haven","hms","htmltools","htmlwidgets","httpuv","httr","jsonlite","knitr","later","learnr","lifecycle","lubridate","magrittr","markdown","methods","mime","modelr","munsell","pillar","pkgconfig","promises","purrr","R6","Rcpp","readr","readxl","reprex","rlang","rmarkdown","rprojroot","rstudioapi","rvest","scales","shiny","stats","stringi","stringr","tibble","tidyr","tidyselect","tidyverse","tools","utils","vctrs","withr","xfun","xml2","xtable","yaml"]},{"type":"character","attributes":{},"value":["0.0.4","0.2.1","1.1.9","4.0.2","1.2.1","0.7.0","1.1.0","2.0.0","2.0.2","1.4-1","4.0.2","1.3.4","4.0.2","1.1.0","1.4.4","0.6.25","1.0.2","0.3.1","0.14","0.4.1","1.0.1","0.5.0","1.5.0","0.0.2","3.3.2","1.4.2","4.0.2","4.0.2","4.0.2","0.3.0","2.3.1","0.5.3","0.5.0","1.5.1","1.5.4","1.4.2","1.7.0","1.30","1.1.0.1","0.10.1","0.2.0","1.7.9","1.5","1.1","4.0.2","0.9","0.1.8","0.5.0","1.4.6","2.0.3","1.1.1","0.3.4","2.4.1","1.0.5","1.3.1","1.3.1","0.3.0","0.4.7","2.4","1.3-2","0.11","0.3.6","1.1.1","1.5.0","4.0.2","1.4.6","1.4.0","3.0.3","1.1.1","1.1.0","1.3.0","4.0.2","4.0.2","0.3.4","2.2.0","0.16","1.3.2","1.8-4","2.2.1"]}]}]}
 </script>
 <!--/html_preserve-->
 </div>
