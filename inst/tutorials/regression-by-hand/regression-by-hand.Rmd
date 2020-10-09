@@ -16,127 +16,178 @@ library(shiny)
 options(dplyr.summarise.inform = FALSE)
 library(tidyverse)
 knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
+set.seed(1)
 ames <- AmesHousing::make_ames() %>%
-  mutate(Sale_Price = Sale_Price / 1000)
-data1 <- ames %>% slice_head(n = 3) %>% select(Lot_Area, Sale_Price) %>% mutate(across(everything(), as.numeric))
-data2 <- ames %>% slice_head(n = 3) %>% select(Lot_Area, Bsmt_Unf_SF, Sale_Price) %>% mutate(across(everything(), as.numeric))
+  slice_sample(prop = 1.0) %>% 
+  mutate(Sale_Price = Sale_Price / 1000) %>% 
+  select(Lot_Area, Bsmt_Unf_SF, Sale_Price) %>%
+  mutate(across(everything(), as.numeric))
+training_set <- ames %>% slice(1:10)
+test_set <- ames %>% slice(11:n())
 min_intercept <- 0
 max_intercept <- 250
 ```
 
-# Small data
+## Objectives
+
+* Experience the process of adjusting model parameters to fit data
+* Contrast different ways of measuring error, and how that affects what model you choose
+* See how models can perform better on their training data than unseen data
+
+
+## Simplest model
+
+We'll start by looking at the simplest possible model, one that predicts a constant
+sale price for every home. This is analogous to saying something like "Homes around
+here generally go for around $150k".
 
 We'll start by using a tiny subset of the home sale dataset.
 
 ```{r subset-data, echo=TRUE, eval=TRUE}
-data1
+training_set
 ```
 
-```{r}
-summary(data1)
+```{r echo=TRUE}
+summary(training_set)
 ```
 
 
-## Intercept only
+### Intercept only
 
 Adjust the value of "intercept" to make your line give the best prediction.
 
 ```{r, echo=FALSE}
 sliderInput("intercept", "Intercept", min = min_intercept, max = max_intercept, value = 125)
-plotOutput("plot_intercept_only")
-tableOutput("error_intercept_only")
+plotOutput("plot_intercept_train")
+tableOutput("error_intercept_train")
 ```
 
 ```{r context="server"}
-output$plot_intercept_only <- renderPlot({
-  intercept <- input$intercept
-  ggplot(data1, aes(x = Lot_Area, y = Sale_Price)) +
-    geom_point() +
-    geom_abline(intercept = intercept, slope = 0)
-})
-output$error_intercept_only <- renderTable({
-  intercept <- input$intercept
-  data1 %>% 
-    mutate(prediction = intercept, residual = Sale_Price - prediction) %>% 
+plotModel <- function(dataset, intercept, coef_lot_area) {
+  ggplot(dataset, aes(x = Lot_Area, y = Sale_Price)) +
+      geom_point() +
+      geom_abline(intercept = intercept, slope = coef_lot_area)
+}
+
+errorTable <- function(dataset, intercept, coef_lot_area) {
+  dataset %>% 
+    mutate(prediction = intercept + Lot_Area * coef_lot_area, residual = Sale_Price - prediction) %>% 
     summarize(
       mean_error = mean(residual),
       mean_absolute_error = mean(abs(residual)),
       max_abs_error = max(abs(residual)),
       mean_squared_error = mean(residual * residual)
     )
-})
+
+}
+output$plot_intercept_train <- renderPlot({ plotModel(training_set, input$intercept, 0) })
+output$plot_intercept_test <- renderPlot({  plotModel(test_set,     input$intercept, 0) })
+output$plot_lotarea_train <- renderPlot({   plotModel(training_set, input$intercept2, input$coef_lot_area)})
+output$plot_lotarea_test <- renderPlot({    plotModel(test_set,     input$intercept2, input$coef_lot_area) })
+
+output$error_intercept_train <- renderTable({ errorTable(training_set, input$intercept, 0) })
+output$error_intercept_test  <- renderTable({ errorTable(test_set, input$intercept, 0) })
+output$error_lotarea_train   <- renderTable({ errorTable(training_set, input$intercept2, input$coef_lot_area) })
+output$error_lotarea_test    <- renderTable({ errorTable(test_set, input$intercept2, input$coef_lot_area) })
 ```
 
 ```{r lowest-mae}
 question("We get the lowest Mean Absolute Error when we set the intercept to the ___ of the Sale_Price column (see summary table above)",
          answer("minimum"),
          answer("mean"),
+         answer("exactly halfway between minimum and maximum"),
          answer("median", correct = TRUE),
          answer("maximum"),
          incorrect = "Try changing the intercept to each of these options and see what error you get!",
          allow_retry = TRUE)
 ```
 
+```{r lowest-mse}
+question("We get the lowest Mean Squared Error when we set the intercept to the ___ of the Sale_Price column (see summary table above)",
+         answer("minimum"),
+         answer("mean", correct = TRUE),
+         answer("exactly halfway between minimum and maximum"),
+         answer("median"),
+         answer("maximum"),
+         incorrect = "Try changing the intercept to each of these options and see what error you get!",
+         allow_retry = TRUE)
+```
 
-Now, adjust both "intercept" and "coef_lot_area".
+Here's the rest of the data, which we're calling the *test set*. It has `r nrow(test_set)` observations.
+
+```{r echo=TRUE}
+summary(test_set)
+```
+
+
+```{r}
+plotOutput("plot_intercept_test")
+tableOutput("error_intercept_test")
+```
+
+```{r train-vs-test}
+question("Compared with the training set, the Mean Absolute Error on the test set is...",
+         answer("lower, which is good"),
+         answer("lower, which is bad"),
+         answer("about the same"),
+         answer("higher, which is good"),
+         answer("higher, which is bad", correct = TRUE),
+         allow_retry = TRUE)
+```
+
+**How different was the MAE on training set vs test set?** Write this down.
+
+## More predictors
+
+Start with "intercept" at the same value as your best value above. Now, adjust both "intercept" and "coef_lot_area" to minimize error on the training set.
 
 ```{r, echo=FALSE}
 sliderInput("intercept2", "Intercept", min = min_intercept, max = max_intercept, value = 125)
-sliderInput("coef_lot_area", "Lot_Area", min = -10, max = 10, value = 0, step = .1)
-plotOutput("plot_one_coef")
+sliderInput("coef_lot_area", "Lot_Area", min = -.01, max = .01, value = 0, step = .0001)
+plotOutput("plot_lotarea_train")
+tableOutput("error_lotarea_train")
 ```
 
-```{r context="server"}
-output$plot_one_coef <- renderPlot({
-  intercept <- input$intercept2
-  coef_lot_area <- input$coef_lot_area
-  ggplot(data1, aes(x = Lot_Area, y = Sale_Price)) +
-    geom_point() +
-    geom_abline(intercept = intercept, slope = coef_lot_area)
-})
+Consider these questions:
+
+* Did you need to adjust "intercept"? Why or why not?
+* Were you able to get a better error than when you just had intercept? Why or why not?
+
+Now let's look at the test set:
+
+```{r, echo=FALSE}
+plotOutput("plot_lotarea_test")
+tableOutput("error_lotarea_test")
 ```
 
-# More data!
 
-```{r subset-data-2, exercise.setup="subset-data"}
-data2
-```
 
-```{r plot_two_coef_data2, exercise=TRUE, exercise.setup="subset-data-2"}
-intercept = 125
-coef_lot_area <- .1
+## Evaluate error
 
-ggplot(data2, aes(x = Lot_Area, y = Sale_Price)) +
-  geom_point() +
-  geom_abline(intercept = intercept, slope = coef_lot_area)
-```
-
-# Evaluate error
-
-Write code here to add a `prediction` and `residual` column to `data2`.
+Write code here to add a `prediction` and `residual` column to `test_set`.
 Make sure that you use the correct sign for *residual*.
 
-```{r add-prediction, exercise=TRUE, exercise.setup="subset-data-2"}
+```{r add-prediction, exercise=TRUE}
 intercept = 125
 coef_lot_area <- .1
 
-data2_augmented <- data2 # Your code here
+test_set_augmented <- test_set # Your code here
 ```
 
-```{r add-prediction-solution, exercise.setup="subset-data-2"}
+```{r add-prediction-solution}
 intercept = 125
 coef_lot_area <- .1
 
-data2_augmented <- data2 %>%
+test_set_augmented <- test_set %>%
   mutate(predicted = intercept + coef_lot_area * Lot_Area,
          residual = Sale_Price - predicted)
 ```
 
-Now, write code that uses `data2_augmented` to compute the
+Now, write code that uses `test_set_augmented` to compute the
 *mean error* (bias), *mean absolute error*, and *mean squared error*. Use `summarize`.
 
 ```{r summarize-error, exercise=TRUE, exercise.setup="add-prediction-solution"}
-data2_augmented %>% 
+test_set_augmented %>% 
   summarize(
     mean_error = 0, # your code here
     mean_absolute_error = 0, # etc.
@@ -145,7 +196,7 @@ data2_augmented %>%
 ```
 
 ```{r summarize-error-solution}
-data2_augmented %>% 
+test_set_augmented %>% 
   summarize(
     mean_error = mean(residual),
     mean_absolute_error = mean(abs(residual)),
