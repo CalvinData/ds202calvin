@@ -10,7 +10,7 @@
 
 <meta name="author" content="Kenneth Arnold" />
 
-<meta name="date" content="2020-10-13" />
+<meta name="date" content="2020-10-14" />
 
 <meta name="progressive" content="false" />
 <meta name="allow-skip" content="true" />
@@ -177,6 +177,8 @@ $(document).ready(function () {
 ##  3rd Qu.: 11500   3rd Qu.: 796.0   3rd Qu.:213.50  
 ##  Max.   :215245   Max.   :2336.0   Max.   :755.00</code></pre>
 <p><div id="plot_intercept_test" class="shiny-plot-output" style="width: 100% ; height: 400px"></div><div id="error_intercept_test" class="shiny-html-output"></div></p>
+<!--
+Intercept is extremely low-variance, so we should expect very similar train and test performance.
 <div class="panel panel-default">
 <div data-label="train-vs-test" class="tutorial-question panel-body">
 <div id="train-vs-test-answer_container" class="shiny-html-output"></div>
@@ -185,7 +187,9 @@ $(document).ready(function () {
 <script>if (Tutorial.triggerMathJax) Tutorial.triggerMathJax()</script>
 </div>
 </div>
-<p><strong>How different was the MAE on training set vs test set?</strong> Write this down.</p>
+
+**How different was the MAE on training set vs test set?** Write this down.
+-->
 </div>
 </div>
 <div id="section-more-predictors" class="section level2">
@@ -287,7 +291,8 @@ errorTable <- function(dataset, intercept, coef_lot_area) {
       mean_error = mean(residual),
       mean_absolute_error = mean(abs(residual)),
       max_abs_error = max(abs(residual)),
-      mean_squared_error = mean(residual * residual)
+      mean_squared_error = mean(residual * residual),
+      rmse = sqrt(mean_squared_error)
     )
 
 }
@@ -350,7 +355,7 @@ output$`tutorial-exercise-summarize-error-output` <- renderUI({
 <div id="doc-metadata">
 <h2 class="title toc-ignore" style="display:none;">Make Your Own Model</h2>
 <h4 class="author"><em>Kenneth Arnold</em></h4>
-<h4 class="date"><em>2020-10-13</em></h4>
+<h4 class="date"><em>2020-10-14</em></h4>
 </div>
 <!-- end doc-metadata -->
 

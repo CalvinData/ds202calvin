@@ -78,9 +78,9 @@ errorTable <- function(dataset, intercept, coef_lot_area) {
       mean_error = mean(residual),
       mean_absolute_error = mean(abs(residual)),
       max_abs_error = max(abs(residual)),
-      mean_squared_error = mean(residual * residual)
+      mean_squared_error = mean(residual * residual),
+      rmse = sqrt(mean_squared_error)
     )
-
 }
 output$plot_intercept_train <- renderPlot({ plotModel(training_set, input$intercept, 0) })
 output$plot_intercept_test <- renderPlot({  plotModel(test_set,     input$intercept, 0) })
