@@ -15,15 +15,17 @@ library(learnr)
 library(shiny)
 options(dplyr.summarise.inform = FALSE)
 library(tidyverse)
+library(tidymodels)
+data("ames", package = "modeldata")
 knitr::opts_chunk$set(echo = FALSE, eval=TRUE)
 set.seed(1)
-ames <- AmesHousing::make_ames() %>%
-  slice_sample(prop = 1.0) %>% 
+ames <- ames %>%
   mutate(Sale_Price = Sale_Price / 1000) %>% 
   select(Lot_Area, Bsmt_Unf_SF, Sale_Price) %>%
   mutate(across(everything(), as.numeric))
-training_set <- ames %>% slice(1:10)
-test_set <- ames %>% slice(11:n())
+ames_split <- rsample::initial_split(ames, prop = 1/10)
+training_set <- rsample::training(ames_split)
+test_set <- rsample::testing(ames_split)
 min_intercept <- 0
 max_intercept <- 250
 ```
@@ -41,7 +43,7 @@ We'll start by looking at the simplest possible model, one that predicts a const
 sale price for every home. This is analogous to saying something like "Homes around
 here generally go for around $150k".
 
-We'll start by using a tiny subset of the home sale dataset.
+We'll start by using a small subset of the home sale dataset.
 
 ```{r subset-data, echo=TRUE, eval=TRUE}
 training_set
@@ -125,6 +127,8 @@ plotOutput("plot_intercept_test")
 tableOutput("error_intercept_test")
 ```
 
+<!--
+Intercept is extremely low-variance, so we should expect very similar train and test performance.
 ```{r train-vs-test}
 question("Compared with the training set, the Mean Absolute Error on the test set is...",
          answer("lower, which is good"),
@@ -136,6 +140,7 @@ question("Compared with the training set, the Mean Absolute Error on the test se
 ```
 
 **How different was the MAE on training set vs test set?** Write this down.
+-->
 
 ## More predictors
 
