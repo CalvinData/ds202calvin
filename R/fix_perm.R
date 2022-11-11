@@ -6,7 +6,10 @@
 fix_perm <- function(dir = NULL) {
   if (is.null(dir)) dir <- here::here()
   # Get the default ACL for the project, stored in a temp file.
-  default_acl <- system2("getfacl", args = c("--default", dir), stdout=TRUE)
+  # NOTE: despite accepting an args *vector*, system2 PASSES ARGS THROUGH THE SHELL.
+  # So we need to quote things.
+  # See https://ro-che.info/articles/2020-12-11-r-system2
+  default_acl <- system2("getfacl", args = c("--default", shQuote(dir)), stdout=TRUE)
   default_acl_file <- tempfile()
   cat(default_acl, file=default_acl_file, sep="\n")
 
@@ -15,8 +18,7 @@ fix_perm <- function(dir = NULL) {
     dir, recursive = TRUE,
     all.files = TRUE, full.names = TRUE, include.dirs = TRUE)
   for (f in all_files) {
-    #cat(paste("setfacl", c(paste0("--set-file=", default_acl_file), f)))
-    args <- c(paste0("--set-file=", default_acl_file), f)
+    args <- c(paste0("--set-file=", shQuote(default_acl_file)), shQuote(f))
     system2("setfacl", args = args)
   }
   unlink(default_acl_file)
