@@ -5,6 +5,15 @@
 #' for those files.
 fix_perm <- function(dir = NULL) {
   if (is.null(dir)) dir <- here::here()
+
+  if(TRUE) {
+    # restore-all-default-acl could be something like this:
+    # shopt -s globstar; for f in ./**; do getfacl --default . | setfacl --set-file=- "$f"; done
+    withr::with_dir(dir, {
+      system2("restore-all-default-acl")
+    })
+  } else {
+
   # Get the default ACL for the project, stored in a temp file.
   # NOTE: despite accepting an args *vector*, system2 PASSES ARGS THROUGH THE SHELL.
   # So we need to quote things.
@@ -22,4 +31,5 @@ fix_perm <- function(dir = NULL) {
     system2("setfacl", args = args)
   }
   unlink(default_acl_file)
+  }
 }
