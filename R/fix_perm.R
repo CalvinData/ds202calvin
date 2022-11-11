@@ -3,7 +3,8 @@
 #' Uploading files (and other situations) sometimes cause broken file
 #' permissions. This script restores the default ACLs (access control lists)
 #' for those files.
-fix_perm <- function(dir = '.') {
+fix_perm <- function(dir = NULL) {
+  if (is.null(dir)) dir <- here::here()
   # Get the default ACL for the project, stored in a temp file.
   default_acl <- system2("getfacl", args = c("--default", dir), stdout=TRUE)
   default_acl_file <- tempfile()
