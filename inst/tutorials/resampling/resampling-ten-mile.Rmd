@@ -1,0 +1,718 @@
+---
+title: "Resampling"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+    theme: spacelab
+    highlight: haddock
+    css: css/mgmt535.css
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(
+  echo = FALSE)
+
+# https://bookdown.org/yihui/rmarkdown-cookbook/reuse-chunks.html#embed-chunk
+<<user-facing-setup>>
+```
+
+
+```{r user-facing-setup, include=FALSE}
+library(mosaic)
+library(tidyverse)
+
+theme_set(theme_bw())
+
+TenMileRace <- 
+  mosaicData::TenMileRace |>
+  mutate(
+    time_sec = time,
+    time = round(time_sec / 60,2)
+  )
+# samples used in the text
+set.seed(123)
+TenMileRace1 <- sample(TenMileRace, 200)
+set.seed(4321)
+TenMileRace2 <- sample(TenMileRace, 200)
+
+TenMileWomen1 <- TenMileRace1 |> filter(sex == "F")
+TenMileWomen2 <- TenMileRace2 |> filter(sex == "F")
+
+TenMileMen1 <- TenMileRace1 |> filter(sex == "M")
+TenMileMen2 <- TenMileRace2 |> filter(sex == "M")
+
+SmallData <- tibble(
+  id = LETTERS[1:6],
+  y = rbinom(6, 3, 0.5),
+  x = rbinom(6, 4, 0.7)
+)
+```
+
+## R packages used in the tutorial
+
+### The mosaic package
+
+This tutorial, and our work with resampling more generally, will depend heavily on 
+the **mosaic** package.  This package provides a simple way to create samples and resamples
+from data.  To use this package, you must first load it with
+
+```{r, echo = TRUE}
+library(mosaic)
+```
+
+This has been done for you in this tutorial, but if you are working in RStudio, you will
+need to be sure that this package has been loaded.
+
+## Samples and Resamples
+
+The `sample()` and `resample()` functions sample without and with replacement.
+You can image sampling like drawing names out of a hat.
+
+* Without replacement means that once a name is drawn, it is set aside and can't be 
+selected again. The next draw is guaranteed to be a different person.
+
+* With replacement means that each time we draw a name, we take note of it and then
+put it back into the hat, so it might be selected again on the next draw (or some later draw).
+
+Here is a simple example where will sample 6 of the first ten numbers.  Run this code several
+times. You should see that
+
+* the numbers change each time (it's random);
+* `sample(x)` always produces 6 different numbers;
+* `resample(x)` usually repeats values -- that's what *with replacement* means.
+
+```{r, sample-resample, exercise = TRUE}
+x <- 1:10; x
+sample(x, 6)
+resample(x, 6)
+```
+
+```{r, sample-resample-hint}
+# Here's the code with the argument 6 deleted.
+sample(x)
+resample(x)
+```
+
+
+### Experiment a little
+
+What happens if you leave off the argument 6?  Try it and find out.
+
+```{r, resample-no-size-quiz}
+quiz(
+  question("What happens if you delete the argument 6 in the code above?",
+    answer("It doesn't work, we get an error message"),
+    answer("We get just one value. The default size is 1."),
+    answer("We get a new sample the same size the original. (10 items in this case.)", correct = TRUE),
+    random_answer_order = FALSE
+  )
+)
+```
+
+### Using the pipe
+
+We can also write this code using the pipe (`|>`) like this:
+
+```{r sample-with-pipe, exercise = TRUE}
+x <- 1:10; x
+x |> sample(6)
+x |> resample(6)
+```
+
+#### Expriment a little
+
+Now what happens if you delete the 6?
+
+### Sampling and resampling a data frame
+
+We can also sample or resample an entire data frame.
+To see how this works, let's sample and resample from a small data set called
+`SmallData`.
+
+```{r small-data}
+SmallData |> 
+  knitr::kable(caption = "A small data set.") |> 
+  kableExtra::kable_styling(full_width = FALSE)
+```
+
+In the code chunk below, create a sample of size 3.  Do this two times, once with 
+without replacement and once with replacement. If you run the chunk several times,
+you should get different samples each time.
+
+```{r small-data-sample, exercise = TRUE}
+SmallData
+
+```
+
+```{r small-data-sample-hint-1}
+# here is the version WIHTOUT replacement (no rows will be repeated)
+sample(SmallData, 3)
+```
+
+```{r small-data-sample-hint-2}
+# here is the version WITH replacement (some rows might be repeated)
+resample(SmallData, 3)
+```
+
+
+### Setting the seed for the random number generator
+
+When working with a random sample, it can get annoying if the observations in
+the sample change every time you re-run your code. Sometimes it is convenient to
+be able to get the same “random” sample repeatedly. We can do this using
+`set.seed()`. 
+
+The argument to `set.seed()` can be any integer you like. If you
+use a different number, you will get different results. But if you use the same
+number, you will get the same results.
+
+#### Give it a try
+
+1. Run the code below several times.  You should get the same result each time.
+2. Then change the number in `set.seed()`.  Now you should get something different.
+Of course, if you repeat it, you will get that new thing again and again.
+
+```{r small-data-set-seed, exercise = TRUE}
+set.seed(54321)     # change this any number you like and see what happens
+resample(SmallData)
+```
+
+
+```{r seed-quiz}
+quiz(
+  question(
+    "What happens if you create two samples in the chunk above (after set.seed())?",
+    answer("set.seed() no longer works and we get different samples each time"),
+    answer("The two samples we get match each other."),
+    answer("We get two different samples the first time. If we run the chunk again, the first sample will be the same as before, but the second sample will change. (set.seed() only affects the next line of code.)"),
+    answer("We get two different samples, but if we rerun the code chunk, we get those same
+           two samples again.", correct = TRUE),
+    random_answer_order = TRUE
+  )
+)
+```
+
+## Why all this resampling?
+
+We can compute sample statistics from data, but without some measure of uncertainty,
+we don’t know how reliable they are. By how much are they likely to be wrong?
+That’s key to be able to make good decisions based on the statistics! 
+
+If only we could get *many* samples from our population of interest, recompute our 
+statistic for each sample, then we could see how much they vary, and use that to quantify 
+the uncertainty of our parameter estimate. 
+
+But that’s ridiculous – almost no one has
+time and money to repeat their studies hundreds of times.  What we can do,
+though, is treat our *sample* like a stand-in for the population, using the
+computer to resample (with replacement) from the *sample data* many times to get
+lots and lots of *resamples* (also called *bootstrap samples* or *bootstrap replicates*). 
+Then we can compute our statistic of interest for all these bootstrap samples, and see how
+much they vary to quantify uncertainty. (It may sound a bit crazy, but it’s proven to work.)
+
+The video below was produced by Auckland statistician Chris Wild and uses some nice 
+computer simulation to demonstrate what resampling is and why it is useful.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/iN-77YVqLDw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+## Sampling and Resampling Ten Mile Race Running Times
+
+### A sample of size 200
+
+In our text, a sample of size 200 was drawn from the `TenMileRace` data.
+Normally we don't take smaller samples from our data like this; this is just to
+illustrate the process of sampling.
+
+The seed used was 123, like this:
+
+```{r, echo = TRUE}
+set.seed(123)
+TenMileRace1 <- sample(TenMileRace, 200)
+```
+
+This data set has been saved in the tutorial so you can use it throughout the tutorial 
+(no need to recreate it).
+
+Confirm that this matches what's in the text by computing the mean running
+time for men and for women. You should get the same results as in 
+[Table 5.1](https://statistical-modeling.netlify.app/05-stat-inference.html#tbl-TenMileRace1)
+
+
+```{r TenMileRace1, exercise = TRUE}
+
+```
+
+
+```{r TenMileRace1-hint}
+df_stats( time ~ sex, data = TenMileRace1, mean)
+```
+
+
+### Recreating Figure 5.5 (top)
+
+`TenMileRace1`, our sample of size 200, was used to create the top panel of
+[Figure 5.5](https://statistical-modeling.netlify.app/05-stat-inference.html#fig-resampling-distribution).  Let's see how.
+
+Notice that the plot only shows the result for women. We can get the women from
+our `TenMileRace1` data like this:
+
+```{r make-men, echo=TRUE}
+TenMileWomen1 <- 
+  TenMileRace1 |>
+  filter(sex == "F")
+```
+
+<div class = "note">
+This has already been done for you in this tutorial, 
+so you don't need to know the details, but it is pretty
+clear what the code is doing.  We start with our `TenMileRace1` sample and then keep only
+the rows where `sex == "F"`.  (The double equals means "check whether things are equal"
+as apposed to "make something be equal.)
+</div>
+
+
+Now, let's make sure we understand what the figure is showing us.  Along the x-axis,
+we have the mean running time for women computed from many different resamples. The process
+for getting one number used in the density plot goes like this:
+
+1. Take a resample from the original `TenMileWomen1` data set (of size 200).
+2. Compute the mean running time for men and for women in that resample.
+
+Then we do that lots of times to a **resampling distribution** (also called a 
+**bootstrap** distribution).
+
+### Let's do it!
+
+Here is code to compute the two means from our original sample:
+
+```{r, boot1, exercise = TRUE}
+df_stats( ~ time, data = TenMileWomen1, mean)
+```
+
+Modify the code above as follows.
+
+1. Instead of using `TenMileRace1`, use `resample(TenMileRace1)`.  Each time you run this,
+you should get a different mean (for each group) because you are using a different resample.
+
+```{r, boot1-hint-1}
+df_stats( ~ time, data = resample(TenMileWomen1), mean)
+```
+
+2. Now put `do(3) *` in front of your code.  That says to do that three times.
+
+```{r, boot1-hint-2}
+do(3) * df_stats( ~ time, data = resample(TenMileWomen1), mean)
+```
+
+3. Now change 3 to some bigger number like 1000 or 2000 and *save the results* as `Bootstrap1`.  (It doesn't do us much good to have 1000 values fly by on the screen.)
+
+
+```{r, boot1-hint-3}
+Bootstrap1 <- 
+  do(1000) * df_stats( ~ time, data = resample(TenMileWomen1), mean)
+```
+
+4. Finally, make a density plot of all those sample means using the `Bootstrap1` data set.
+(Use `glimpse()` to inspect the `Bootstrap1` data so you now what it looks like.)
+
+```{r, boot1-hint-4}
+Bootstrap1 <- 
+  do(1000) * df_stats( ~ time, data = resample(TenMileWomen1), mean)
+glimpse(Bootstrap1)
+gf_density( ~ mean, data = Bootstrap1)
+```
+
+Your resulting plot should look similar to, but not identical to the one in the top panel
+of Figure 5.5.
+
+Want to do the bottom panel?  Just use `TenMileWomen2` instead of `TenMileWomen1`.
+You can do that here if you want some more practice:
+
+```{r, boot2, exercise = TRUE}
+
+```
+
+```{r, boot2-solution}
+Bootstrap2 <- 
+  do(1000) * df_stats( ~ time, data = resample(TenMileWomen2), mean)
+glimpse(Bootstrap2)
+gf_density( ~ mean, data = Bootstrap2)
+```
+
+
+### Fancier naming with df_stats()
+
+`df_stats()` has an option to give you longer names, or even to let you choose the 
+names yourself.  Let's give that a try:
+
+```{r fancy-names, exercise = TRUE}
+# longer names chosen by dfstats()
+df_stats( ~ time, data = TenMileWomen1, mean, long_names = TRUE)
+
+# choose the name yourself
+df_stats( ~ time, data = TenMileWomen1, mean_running_time = mean)
+```
+
+This can be handy since there are lots of things we might have taken a mean of, but we took
+the mean running time.
+
+### Summary
+
+Creating a Resampling (aka Bootstrap) distribution is pretty simple.  The general format looks
+like
+
+```{r bootstrap-template-1, eval = FALSE, echo = TRUE}
+do(1000) * df_stats( formula, data = my_data, stat)
+```
+
+or 
+
+```{r bootstrap-template-2, eval = FALSE, echo = TRUE}
+do(1000) * stat(formula, data = my_data)
+```
+
+where `stat` is some function that computes a statistic, like the mean. You could choose 
+a number bigger than 1000.  The larger the number the better the bootstrap works, but also
+the longer it takes.  And pretty quickly we reach a point of diminishing returns.
+
+#### Try it!
+
+Let's see that in action. Create two bootstrap distributions, one with 1000 resamples
+and the other with 5000 resamples. Plot the two bootstrap distributions on top of each
+other to see how similar or different or similar they are. See how much of this you can do without
+looking back at the examples above -- look back only when you get stuck.
+A solution is provided that you can use to check your work.
+
+```{r compare-boot, exercise = TRUE}
+
+
+```
+
+```{r compare-boot-solution}
+Bootstrap1a <- 
+  do(1000) * df_stats( ~ time, data = resample(TenMileWomen1), mean, long_names = TRUE)
+Bootstrap1b <- 
+  do(5000) * df_stats( ~ time, data = resample(TenMileWomen1), mean, long_names = TRUE)
+
+gf_density( ~ mean_time, data = Bootstrap1a, fill = ~"size 1000") |>
+  gf_density( ~ mean_time, data = Bootstrap1b, fill = ~"size 5000") 
+```
+
+
+
+
+
+In this class, it will suffice to use a number between 1000 and 5000.  If you
+were writing an academic paper, you might use a number between 1000 and 5000 as
+you were getting things prepared, and then run it one time with a larger number
+once your analysis is set.  (Saving the results so you don't have to wait for
+them over and over.)
+
+## Confidence Intervals
+
+Now that we know how to create a resampling distribution, let's create a 95% confidence
+interval from it.  There are two ways:
+
+### Percentile Confidence Intervals
+
+These are just coverage intervals for the bootstrap distribution: We want the central 95% of
+our bootstrap distribution.  `cdata()` will compute this for us:
+
+```{r percentile-ci, exercise = TRUE}
+Bootstrap1 <- 
+  do(1000) * df_stats( ~ time, data = resample(TenMileWomen1), mean, long_names = TRUE)
+
+cdata(~ mean_time, data = Bootstrap1, p = 0.95)
+```
+
+<div class = "note">
+In these tutorials, information computed in one code chunk is not available in other
+code chunks, so we had to recalculate the Bootstrap distribution. If you were working 
+in RStudio, you would not need to do that.
+</div>
+
+### Bootstrap Standard Error Intervals
+
+Bootstrap standard error intervals are based on the following idea:
+
+$$
+\mbox{estimate} \pm \mbox{some number} \cdot SE
+$$
+
+where
+
+* estimate is the value computed from the original sample,
+* SE = estimated standard error = standard deviation of the bootstrap distribution
+* some number is approximately 2 if we want want the middle 95%.
+
+This method is 
+
+* more brittle (it only works if the bootstrap distribution is symmetric and has a 
+particular shape)
+* a little more complicated to compute, just because there are a few more pieces involved.
+
+The primary reason for studying this method is that it is related to methods that 
+don't rely on resampling but estimate the standard error some other way. (If you have
+taken a statistics course before, you may recall learning a bunch of formulas for 
+SE in different situations.)
+
+Let's give it a try
+
+```{r se-ci, exercise = TRUE}
+Bootstrap1 <- 
+  do(1000) * df_stats( ~ time, data = resample(TenMileWomen1), mean, long_names = TRUE)
+
+SE <- sd( ~ mean_time, data = Bootstrap1); SE    # use bootstrap distribution here
+estimate <- mean(~time, data = TenMileWomen1); estimate    # use original sample data here
+
+# now put the pieces together:
+
+estimate - 2 * SE
+estimate + 2 * SE
+
+# fancy:
+
+estimate + c(-1, 1) * 2 * SE
+```
+
+So, not as slick as just using `cdata()`.  But the idea isn't hard.
+
+<div class = "note">
+$2 \cdot SE$ is called the **margin of error** (abbreviated $ME$).
+
+Another way to express your interval is 
+
+$$
+\mbox{estimate} \pm ME
+$$
+</div>
+
+### Your turn
+
+Now you give it a try, this time using the men in `TenMileMen1` as your sample.
+We've created `TenMileMen1` just like we did for the women:
+
+```{r, make-women, echo = TRUE}
+TenMileMen1 <-
+  TenMileRace1 |>
+  filter(sex == "M")
+```
+
+Use this sample to create 95% confidence intervals both ways.
+
+```{r  ci-for-men, exercise = TRUE}
+glimpse(TenMileMen1)
+
+```
+
+
+```{r  ci-for-men-solution}
+Bootstrap1m <- 
+  do(1000) * df_stats( ~ time, data = resample(TenMileWomen1), mean, long_names = TRUE)
+
+# percentile interval
+cdata(~ mean_time, data = Bootstrap1m, p = 0.95)
+
+estiamte <- mean( ~time, data = TenMileMen1); estimate
+SE <- sd( ~ mean_time, data = Bootstrap1m); SE
+ME <- 2 * SE; ME
+
+# bootstrap standard error interval
+estimate + c(-1, 1) * ME
+```
+
+
+### More Practice
+
+You should practice computing confidence intervals until you can type the code without
+looking back at examples.  Here are some more things you can try.
+
+1. Use `TenMileWomen2` and/or `TenMileMen2`, the men and women from our second sample of size 200.
+
+```{r second-sample, exercise = TRUE}
+
+
+
+
+
+
+
+```
+    
+
+2. Create your own sample of size 50 and repeat.  
+
+    You should see that the intervals are about twice as wide as before.  Because we have
+    less data, our estimate for the mean of the population is less precise.
+
+```{r more, exercise = TRUE}
+
+
+
+
+
+
+```
+
+<div id = "more-hint1">
+Use `sample()` to create your sample of size 50.  Don't forget to tell R that you only want
+50.  Inspect the result to make sure you got 50.
+</div>
+
+<div id = "more-hint2">
+Once you have created your new sample, the code should look just like it did before, but 
+with your new sample replacing the previous sample.
+</div>
+
+## Comparing two means
+
+The resampling method can be used to create confidence for many different population parameters.
+Suppose we wanted to estimate how much longer it takes women on average than men to complete the race.
+We are interested in the difference between two means.  We can estimate this by taking the 
+difference between the two means in our sample. There's a handy function for this: `diffmean()`.
+
+### Give it a try
+
+Following the outline above, modify the code below to 
+
+* create a bootstrap distribution,
+* plot the bootstrap distribution, and 
+* compute a 95% confidence interval.
+
+```{r diffmean, exercise = TRUE}
+diffmean(time ~ sex, data = TenMileRace1)
+```
+
+```{r, diffmean-hint-1}
+# step 1: take the difference in means using a resample instead of the original sample.
+diffmean(time ~ sex, data = resample(TenMileRace1))
+```
+
+```{r, diffmean-hint-2}
+# step 2: do it a few times
+do(3) * diffmean(time ~ sex, data = resample(TenMileRace1))
+```
+
+```{r, diffmean-hint-3}
+# step 3: do it many times and save the results
+BootstrapDiffMeans <- 
+  do(1000) * diffmean(time ~ sex, data = resample(TenMileRace1))
+```
+
+```{r, diffmean-hint-4}
+# step 4: plot the result; what other kinds of plots could you make?
+BootstrapDiffMeans <- 
+  do(1000) * diffmean(time ~ sex, data = resample(TenMileRace1))
+
+gf_histogram( ~ diffmean, data = BootstrapDiffMeans)
+```
+
+```{r, diffmean-hint-5}
+# step 5: make a CI (percentile method; you could also do the bootstrap SE method)
+BootstrapDiffMeans <- 
+  do(1000) * diffmean(time ~ sex, data = resample(TenMileRace1))
+
+gf_histogram( ~ diffmean, data = BootstrapDiffMeans)
+
+cdata( ~ diffmean, data = BootstrapDiffMeans)
+```
+
+### Other intervals
+
+We can use a similar process to make confidence intervals for a wide variety of parameters: 
+the mean, the difference between to means, a proportion, the difference between two proportions,
+the standard deviation, the variance, parameters in some
+model, a prediction from some model, etc., etc.
+All we need is a way to compute the relevant estimate from a resample. Then
+we do that over and over to generate the resampling distribution.
+
+Remember, the bootstrap SE method is not appropriate unless the bootstrap distribution is 
+symmetric and bell-shaped. So you should always inspect your bootstrap distribution before
+using that method.
+
+## Coverage Rate
+
+The goal of a 95% confidence interval procedure is that 95% of the confidence intervals contain the 
+value being estimated. Of course, we will never know if this is the case for a particular
+confidence interval because if we knew the value we were trying to estimate, we wouldn't need
+an interval.
+
+But in this particular case, we do have the entire population.  Remember, we began by taking 
+a sample of size 200 from the complete data for the race.  So let's check to see how we did.
+
+1. Compute one of the intervals above.  Let's do the percentile interval for the mean
+running time of women.
+
+```{r, cache = TRUE, echo = TRUE}
+Bootstrap1 <- 
+  do(1000) * df_stats(~ time, data = resample(TenMileWomen1), mean)
+
+cdata( ~ mean, data = Bootstrap1)
+```
+
+2. Compute the mean running time for all women
+
+```{r, echo = TRUE}
+df_stats( time ~ sex, data = TenMileRace, mean)
+```
+
+3. See if the mean running time for all women (step 2) is inside the confidence interval
+produced in step 1.  (In this example, you should see that it is.)
+
+### A coverage rate simulation
+
+<div class = "note">
+You won't ever need to do a simulation like this yourself. It just intended to help
+explain what a coverage rate is.
+</div>
+
+Here's a way to visualize what's happening.  Suppose that instead of creating just one or two samples,
+we created 100 samples. Then from each sample we created a confidence interval. We could plot
+these intervals like this.
+
+```{r, cis, echo = FALSE, message  = FALSE, warning = FALSE, fig.cap = "Visualizing 100 confidence intervals from 100 different random samples of size 101 (the number of women in our first sample of size 200)."}
+set.seed(1235)
+CIsim(101, 100, estimand = 102.6, rdist = rnorm, args = list(mean = 102.6, sd = 15.9),
+      plot = "return") |>
+  gf_lims(y = c(95, 112)) 
+```
+
+The horizontal line in the figure is the true value (102.6).  The blue intervals
+include the correct value.  The four red intervals miss.  That's about what we should expect.
+Roughly 95% of all such intervals should "cover" (include the correct value) and
+around 5% should fail to do so. We would need to do many 1000's of simulations to 
+convince ourselves that the coverage rate is very close to 95%.
+
+Again, we won't ever know for our specific interval (unless we are doing a
+simulation) whether it is one of the 95% that cover or one of the 5% that do
+not. But the confidence interval gives us a sense for how precise our estimate is.
+
+Here is a simulation of 100 intervals from a larger sample: 400 women instead of 100 women.
+
+```{r, cis-narrower, message = FALSE, warning = FALSE, echo = FALSE, fig.cap = "Visualizing 100 confidence intervals from 100 different random samples of size 400."}
+set.seed(1230)
+CIsim(400, 100, estimand = 102.6, rdist = rnorm, args = list(mean = 102.6, sd = 15.9),
+      plot = "return") |>
+  gf_lims(y = c(95, 112))
+```
+
+Things to notice:
+
+1. The intervals are much narrower (because they are based on a larger sample).
+
+2. The coverage rate is still ~ 95% (in this example 94 out of 100 covered and 6
+did not; we'd need to do many more simulations to get a sharper approximation to
+the coverage rate.)
+
+
+## Appendix
+
+To run any code chunk from this tutorial in your own environment, use:
+
+```{r ref.label="user-facing-setup", echo=TRUE, eval=FALSE}
+
+```
+

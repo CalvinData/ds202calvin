@@ -1,0 +1,153 @@
+---
+title: "Time Series Graphics"
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+library(learnr) # remotes::install_github("rstudio/learnr", build_vignettes = TRUE)
+
+knitr::opts_chunk$set(echo = TRUE, comment = "")
+
+# https://bookdown.org/yihui/rmarkdown-cookbook/reuse-chunks.html#embed-chunk
+<<user-facing-setup>>
+```
+
+
+```{r user-facing-setup, include=FALSE}
+library(tidyverse)
+library(tsibble)
+library(lubridate)
+library(fpp3)
+theme_set(theme_bw())
+
+<<make-a10>>
+<<a10-decomposition>>
+```
+
+## Time Plots
+
+`autoplot` will make a time plot from a `tsibble`. Here's an example:
+
+```{r ansett-autoplot}
+ansett %>% 
+  filter(Airports == "MEL-SYD") %>% 
+  autoplot(Passengers) # This calls fabletools::autoplot.tbl_ts
+```
+
+Under the hood, that's just making a `geom_line` plot. **Try doing that by hand**: think about what the aesthetic mappings should be. You should get a nearly-identical plot (there may be differences in the labeling.) Solution is on the slides if needed.
+
+```{r ansett-by-hand, exercise=TRUE}
+ansett %>% 
+  filter(Airports == "MEL-SYD")
+# task: %>% ggplot(aes(___)) + geom_line()
+```
+
+## Aggregating over time
+
+Let's practice aggregating `tsibbles` to change the level of granularity. `vic_elec` has electric demand data for every half hour. Let's try aggregating over various time ranges. Try the following different `index_by`s:
+
+- hourly (use `time = floor_date(Time, '1 hour')`)
+- daily (use `lubridate::date(Time)`)
+- weekly (use `yearweek(Time)`)
+- monthly (use `yearmonth(Time)`)
+
+Observe what different patterns appear at different temporal granularity. **Why might it be important that we chose to aggregate by the `mean` instead of the `sum` in these plots**, especially the monthly plot?
+
+```{r demand-mean-interval, exercise=TRUE}
+vic_elec %>% 
+  index_by(Time) %>% 
+  summarize(Demand = mean(Demand)) %>% # try changing this to `sum`!
+  autoplot(Demand)
+```
+
+## Seasonal Plots
+
+**Important note**: In colloquial usage, there are 4 seasons per year. But in time series analysis, "seasonal" can mean any effect with a known period.
+
+Let's practice looking at different seasonal periods. **What patterns do you observe in electrical demand when looking at each of the following seasonal plots?**
+
+- yearly (use `period = 'year'`)
+- weekly (`period = 'week'`)
+- daily (`period = 'day'`) (this may take more time to run than the others; can you think of why?)
+- month
+
+**Which seasonal plot is most informative**? Least informative? Why?
+
+```{r demand-season, exercise=TRUE}
+vic_elec %>% gg_season(Demand, period = "year")
+```
+
+## Time Series Decomposition and Autocorrelation
+
+Often a time series will have components that change at different intervals. For example, the prescription drug billing data [discussed in the textbook](https://otexts.com/fpp3/tsibbles.html) has a generally increasing trend but with spikes around the beginning of each year because of year-end buying patterns.
+
+```{r make-a10}
+a10 <- 
+  PBS %>%
+  filter(ATC2 == "A10") %>%
+  select(Month, Concession, Type, Cost) %>%
+  summarise(TotalCost = sum(Cost) / 1e6)
+```
+
+```{r a10-timeplot}
+a10 %>% autoplot(TotalCost)
+```
+
+
+We'll use the STL ("Seasonal and Trend decomposition using Loess") method to separate the time series into a sum of trend and seasonal components. We won't be discussing time series decompositions formally in this class, but I wanted you to know that this is possible. See [the textbook](https://otexts.com/fpp3/stl.html) for more details:
+
+```{r a10-decomposition}
+a10_components <- a10 %>% 
+  model(
+    STL(TotalCost ~ trend(window = 12) +
+                   season(window = "periodic"),
+    robust = TRUE)) %>%
+  components()
+a10_components %>%
+  autoplot()
+a10_trend <- a10_components %>% select(trend)
+a10_seasonal <- a10_components %>% select(seasonal = season_year)
+```
+
+We'll first look at the correlogram of the entire series, then look at each component.
+
+```{r a10-acfs, exercise=TRUE}
+a10 %>% 
+  ACF(TotalCost, lag_max = 50) %>% 
+  autoplot()
+```
+
+Exercises:
+
+1. What patterns do you notice in the ACF for `TotalCost`? What values are larger than their neighbors? What lags do they occur at? (note the units of the x-axis.) **Why might that make sense for data with a yearly "seasonal" pattern**?
+2. Change the code to plot the ACF for `a10_trend` (the variable name is `trend`). **What does the ACF of a trend look like**? Why might that make sense?
+3. Change the code to plot the ACF for `a10_seasonal` (the variable name is `season`). **What does the ACF of a seasonal pattern look like**? Why might that make sense?
+
+
+```{r a10-trend-acf, include=FALSE}
+a10_trend %>% ACF(trend) %>% autoplot()
+```
+
+```{r a10-seasonal-acf, include=FALSE}
+a10_seasonal %>% ACF(seasonal) %>% autoplot()
+```
+
+
+```{r a10-acf-is-not-sum-of-components, include=FALSE}
+full_join(
+  a10_components %>% ACF(trend) %>% rename(acf_trend=acf),
+  a10_components %>% ACF(season_year) %>% rename(acf_season=acf),
+  by = c('lag', '.model')) %>% 
+  full_join(a10_components %>% ACF(TotalCost) %>% rename(acf_total=acf), by = c('lag', '.model')) %>% 
+  mutate(s = acf_trend + acf_season)
+```
+
+## Appendix
+
+To run any code chunk from this tutorial in your own environment, use:
+
+```{r ref.label="user-facing-setup", echo=TRUE, eval=FALSE}
+
+```
+

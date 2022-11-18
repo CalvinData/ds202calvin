@@ -1,0 +1,143 @@
+---
+title: "Clustering"
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+library(learnr) # remotes::install_github("rstudio/learnr", build_vignettes = TRUE)
+knitr::opts_chunk$set(echo = FALSE, comment = "")
+
+<<user-facing-setup>>
+```
+
+
+```{r user-facing-setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+theme_set(theme_bw())
+options(scipen = 5) # encourage metrics to print in fixed-point notation
+options(dplyr.summarise.inform = FALSE) # silence a warning message
+
+<<load-and-subset-data>>
+<<train-test-split>>
+```
+
+## Basic Setup
+
+```{r load-and-subset-data}
+# Get the data from the "modeldata" package, which comes with tidymodels.
+data(ames, package = "modeldata")
+ames_all <- ames %>% 
+  filter(Gr_Liv_Area < 4000, Sale_Condition == "Normal") %>% 
+  mutate(Sale_Price = Sale_Price / 1000)
+rm(ames)
+```
+
+
+Let's do a train-test split again as usual. It's not as important for unsupervised
+analysis, but if we get an idea about some pattern in the data and want to
+check whether it's real, it'll be helpful to have data we haven't peeked at.
+We can get away with a smaller test set, though (so use 4/5 for training).
+
+```{r train-test-split, exercise.setup='load-and-subset-data'}
+set.seed(10) # Seed the random number generator
+ames_split <- initial_split(ames_all, prop = 4 / 5) # Split our data randomly
+ames_train <- training(ames_split)
+ames_test <- testing(ames_split)
+```
+
+
+### Exercise 
+
+The following code uses k-means clustering to identify cluster centers for the Ames dataset. It plots the result and also shows two summary tables.
+You'll edit it as needed to answer the questions below.
+
+```{r cluster-code, eval=TRUE, fig.asp=0.4, exercise=TRUE, exercise.setup='train-test-split'}
+NUM_CENTERS <- 3
+
+data_for_clustering <- ames_train %>% 
+  select(Latitude, Longitude)
+
+set.seed(123456)
+clustering_results <- data_for_clustering %>% 
+  kmeans(nstart = 10, centers = NUM_CENTERS)
+
+ames_with_clusters <- ames_train %>% 
+  mutate(cluster = as.factor(clustering_results$cluster))
+
+glance(clustering_results)
+tidy(clustering_results)
+
+latlong_plot <- 
+  ggplot(ames_with_clusters, aes(y = Latitude, x = Longitude, color = cluster)) +
+    geom_point(alpha = .5)
+
+year_area_plot <- 
+  ggplot(ames_with_clusters, aes(x = Gr_Liv_Area, y = Year_Built, color = cluster)) +
+    geom_point(alpha = .5)
+
+library(patchwork)
+latlong_plot + year_area_plot + plot_layout(guides='collect')
+```
+
+Exercises:
+
+
+1. What differences do you notice between the plot on the left and the plot on the right?
+1. Try increasing the number of `centers`. What changes about both plots?
+2. Use only `Year_Built` for clustering (removing latitude and longitude). What can you say about the age of homes in different parts of town?
+2. Try clustering using `select(Latitude, Longitude, Gr_Liv_Area)`. What changes about both plots?
+  Why are they different?
+2. Try scaling `Gr_Liv_Area` to have a maximum of 1 using `Gr_Liv_Area = rescale(Gr_Liv_Area, to = c(0, 1))` etc. What changes about both plots? Why?
+2. Try adding scaling for `Latitude` (but not `Longitude`). What changes and why?
+2. Now add scaling for for `Longitude`. What changes and why?
+2. Try changing the maximum to `10` for `Gr_Liv_Area`. Then try `0.1`. What changes and why?
+2. Try adding `Year_Built`.
+
+
+```{r quiz}
+quiz(
+  question("With the default code above, which of the plots shows the clearest division of data into clusters?",
+    answer("left plot (Latitude by Longitude", correct = TRUE),
+    answer("right plot (year built by living area)")
+  ),
+  question("Do the two plots show different houses?",
+    answer("No, they show two different views of the same data.", correct = TRUE),
+    answer("Yes, the houses on the left had missing data for year and living area.")),
+  question("What changes about the plots when you increase the number of centers from 3 to 10? Select all that apply",
+    answer("The table of centers has more rows.", correct = TRUE),
+    answer("The within-cluster sum-of-squares goes up."),
+    answer("The within-cluster sum-of-squares goes down.", correct = TRUE),
+    answer("Each cluster becomes more tightly defined (fewer outlier homes)", correct = TRUE),
+    answer("There are more divisions between clusters that might not correspond to meaningful divisions in the data.", correct = TRUE))
+)
+```
+
+
+
+## Relating to sale price
+
+Do the patterns captured by these clusters also happen to relate to sale price?
+
+Add the following code to your code from the previous section to plot how sale price varies between clusters.
+
+Notice that even though we didn't use the sale price at all in any of that analysis, sometimes the clusters reflect variations in sale price anyway.
+**Which of the clustering setups that you explored in the previous exercise found clusters that relate most strongly with sale price?**
+
+```{r sale-price-by-cluster, fig.asp=0.4, exercise.setup='cluster-code', exercise=TRUE}
+ames_with_clusters %>% 
+  ggplot(aes(x = Sale_Price, y = cluster)) + geom_boxplot()
+```
+
+
+```{r include=FALSE, eval=FALSE}
+# This is a way to show lots of clusters.
+ggplot(ames_with_clusters, aes(y = Latitude, x = Longitude, color = cluster)) +
+    geom_point(data = select(ames_with_clusters, -cluster), color = "grey") +
+    geom_point(alpha = .5) +
+  facet_wrap(vars(cluster)) + 
+  guides(color = "none")
+```
+
+

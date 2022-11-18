@@ -1,0 +1,82 @@
+
+span.boxed {
+    border:5px solid gray;
+    border-radius:10px;
+    padding: 5px;
+  }
+span.invboxed {
+  border:5px solid gray;
+  padding: 5px;
+  border-radius:10px;
+  color: white;
+}
+
+
+table, td, th { border:0px; }
+
+/* cellpadding */
+th, td { padding: 5px; }
+
+
+div.do {
+  background-color: aliceblue;
+  border-radius: 5px;
+  border-style: solid;
+  border-color: navy;
+  padding: 10px 10px 5px;
+  margin: 0px 25px 10px;
+}
+
+div.tip:before {
+  content: 'Tip';
+}
+
+div.tip::first-line{
+  font-weight: 130%;
+  font-size: 130%;
+  color: navy;
+}
+
+div.tip {
+  border-radius: 5px;
+  border-style: solid;
+  border-color: navy;
+  padding: 10px 10px 5px;
+  margin: 0px 25px 10px;
+}
+
+div.note:before {
+  content: 'Note';
+}
+
+div.note::first-line{
+  font-weight: 130%;
+  font-size: 130%;
+  color: gray40;
+}
+
+div.note {
+  border-radius: 5px;
+  border-style: solid;
+  border-color: gray40;
+  padding: 10px 10px 5px;
+  margin: 0px 25px 10px;
+}
+
+div.boxed:before {
+  content: attr(data-label);
+}
+
+div.boxed::first-line{
+  font-weight: 130%;
+  font-size: 130%;
+  color: gray40;
+}
+
+div.boxed {
+  border-radius: 5px;
+  border-style: solid;
+  border-color: gray40;
+  padding: 10px 10px 5px;
+  margin: 0px 25px 10px;
+}

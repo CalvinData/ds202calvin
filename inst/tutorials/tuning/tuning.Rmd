@@ -1,0 +1,337 @@
+---
+title: "Hyperparameter Tuning and Cross-Validation"
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+library(learnr) # remotes::install_github("rstudio/learnr", build_vignettes = TRUE)
+knitr::opts_chunk$set(echo = TRUE, comment = "")
+tutorial_options(exercise.reveal_solution = FALSE)
+
+# devtools::install_github("tidymodels/usemodels")
+
+# https://bookdown.org/yihui/rmarkdown-cookbook/reuse-chunks.html#embed-chunk
+<<user-facing-setup>>
+```
+
+
+```{r user-facing-setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+theme_set(theme_bw())
+options(scipen = 5) # encourage metrics to print in fixed-point notation
+options(dplyr.summarise.inform = FALSE) # silence a warning message
+
+<<load-and-subset-data>>
+<<train-test-split>>
+<<declare-cv>>
+<<load-data-2>>
+<<declare-cv-2>>
+<<util>>
+```
+
+
+## Introduciton
+
+The goal of this exercise is to ...
+
+-   Apply pre-processing to transform data
+-   Apply cross-validation to identify and avoid overfitting.
+-   Compute the number of samples in each fold for cross-validation.
+-   Identify what tuning parameters affect the performance of each type of classifier
+
+## Getting started
+
+```{r load-and-subset-data}
+data(ames, package = "modeldata")
+ames_all <- ames %>%
+  filter(Gr_Liv_Area < 4000, Sale_Condition == "Normal") %>%
+  mutate(across(where(is.integer), as.double)) %>%
+  mutate(Sale_Price = Sale_Price / 1000)
+rm(ames)
+```
+
+```{r train-test-split}
+metrics <- yardstick::metric_set(mae, rsq_trad)
+
+set.seed(10) # Seed the random number generator
+ames_split <- initial_split(ames_all, prop = 2 / 3)
+ames_train <- training(ames_split)
+ames_test <- testing(ames_split)
+
+ames_with_split_marked <- bind_rows(
+  train = ames_train,
+  test = ames_test,
+  .id = "split"
+) %>% mutate(split = as_factor(split))
+```
+
+```{r util, echo=FALSE}
+lat_long_grid <- expand_grid(
+  Latitude  = modelr::seq_range(ames_train$Latitude,  n = 200, expand = .05),
+  Longitude = modelr::seq_range(ames_train$Longitude, n = 200, expand = .05),
+)
+
+show_latlong_model <- function(dataset, model, model_name = deparse(substitute(model))) {
+  ggplot(dataset, aes(x = Longitude, y = Latitude)) +
+    geom_raster(
+      data = augment(model, lat_long_grid),
+      mapping = aes(fill = .pred)
+    ) +
+    geom_point(color = "black", size = .75) +
+    geom_point(aes(color = Sale_Price), size = .5) +
+    scale_color_viridis_c(aesthetics = c("color", "fill"), limits = range(dataset$Sale_Price)) +
+    coord_equal(expand = FALSE) +
+    guides(fill = "none") +
+    labs(title = model_name) +
+    theme_minimal()
+}
+```
+
+
+## Preprocessing
+
+One simple but important thing that affects some models' performance is *preprocessing*, or more generally, *feature engineering*.
+Two big reasons:
+
+1. Sometimes a model can do *better* if it's given a processed version of a feature. A classic example is dates: a date stored as a string is not likely to be a useful feature, but (as we saw in homework) it's much more useful if we extract information out of it like what day of the week it is and give that as a separate feature.
+2. Sometimes a model *needs* a feature to be encoded to be able to use it at all. This used to be the case for XGBoost: it couldn't use  *categorical* features unless we can *dummy-encoded* them first. (Linear regression also needs dummy encoding, but the code handles that automatically so we sometimes don't notice.)
+
+Let's see a cool example with linear regression. Normally you'd expect linear regression to only be able to fit lines, but with some transformation, we can get it to make nuanced predictions.
+
+We'll need some new code concepts, though: a `workflow` represents a complete modeling process, including both the `model` specification and optionally some a `recipe` that handles the preprocessing.
+
+Here's what linear regression looks like with a `recipe`. We'll start with a blank recipe. (It just extracts the columns we ask for.)
+
+```{r linreg-fit, exercise=TRUE}
+linreg_recipe <- recipe(
+  Sale_Price ~ Latitude + Longitude,
+  data = ames_train)
+
+linreg_workflow <- workflow(
+  preprocessor = linreg_recipe,
+  spec = linear_reg()
+)
+
+# Fit the entire workflow
+linreg_fit <- fit(linreg_workflow, data = ames_train)
+
+# show the model in data space
+show_latlong_model(
+  ames_train,
+  linreg_fit
+)
+
+# Evaluate it on the test set
+augment(linreg_fit, ames_with_split_marked) %>% 
+  group_by(split) %>% 
+  metrics(truth = Sale_Price, estimate = .pred)
+```
+
+We can add a preprocessing step by piping the recipe through some `step_`s. For example, we can add a *spline* transformation of the `Latitude` column by adding a `%>%` and then `step_ns(Latitude, deg_free = 2)`.
+
+(You may have heard of *polynomial* regression, where we make a feature for `x^2`, `x^3`, etc., and that lets us make curve-shaped predictions because our prediction equation now looks like `c1 * x^2 + c2 *x + c3` or the like. Spline transformations are the same basic idea, but are better behaved.)
+
+```{r}
+linreg_recipe <- recipe(
+  Sale_Price ~ Latitude + Longitude,
+  data = ames_train) %>% 
+      step_ns(Latitude, deg_free = 3)
+
+# Show an example of what the recipe output looks like. We don't generally need to use these functions.
+linreg_recipe %>% 
+  prep(training = ames_train) %>% 
+  bake(ames_train) %>% 
+  select(starts_with("Latitude")) %>% 
+  bind_cols(select(ames_train, Latitude)) %>% 
+  pivot_longer(cols = !Latitude, names_to = "predictor") %>% 
+  ggplot(aes(x = Latitude, y = value, color = predictor)) + geom_line()
+```
+
+
+**Exercise**: Try adding a few preprocessing steps. For each one, write in your notes (1) How does the **visualization of the model's predictions** (in data space) change, and (2) How does the **accuracy** change? Don't be overly concerned about the exact accuracy values; just note whether a step seems to help or not.
+
+1. Add the `step_ns()` shown above to the recipe.
+2. Replace `Latitude` by `all_numeric_predictors()`.
+3. Try changing `deg_free` to 2, 3, or 4.
+4. Replace the entire `step_ns` step by `step_discretize(all_numeric_predictors())`.
+5. Replace the `step_discretize` step by `step_interact(~ starts_with("Latitude") : starts_with("Longitude"))`.
+6. Notice the error you got in the previous step. This was because the model hit numerical issues because the features were not on a sensible scale. So *before* the `step_interact`, add `step_normalize(all_numeric_predictors())` and try again.
+
+> Note that we need to give `recipe` a `data` parameter. This is the *template*
+data, just used to tell the recipe what columns there are and what data type
+each one has. It does not actually train on this data!
+
+Note: this did *not* use any kind of cross-validation; we just kept peeking at our testing set. Let's fix that!
+
+## Cross-Validation
+
+Suppose we declare that we want to evaluate models using 6-fold cross-validation:
+
+```{r declare-cv}
+ames_resamples <- vfold_cv(ames_train, v = 6)
+```
+
+Here are the sizes of the training and test sets:
+
+```{r echo=FALSE}
+ames_with_split_marked %>% count(split)
+```
+
+**Exercise**: How many homes are in one fold?
+
+**Exercise**: When performing cross-validation using these resamples, how many homes will be used for *fitting* models?
+
+**Exercise**: When performing cross-validation using these resamples, how many homes will be used for *evaluating the performance* of fitted models?
+
+## Tuning
+
+We'll use a dataset about predicting whether a customer will *churn* (cancel their service) or not.
+See [`mlc_churn`](https://modeldata.tidymodels.org/reference/mlc_churn.html) for more details.
+
+```{r load-data-2}
+data("mlc_churn", package = "modeldata")
+skimr::skim(mlc_churn)
+```
+
+Note that most customers *didn't* churn, so predicting "no" would be right much of the time. Any model should do better than this:
+
+```{r}
+mlc_churn %>% count(churn) %>% mutate(frac = n / sum(n))
+```
+
+We'll compare the performance of two models using cross validation. First, let's declare the resamples to use:
+
+```{r declare-cv-2}
+churn_split <- initial_split(mlc_churn)
+churn_resamples <- training(churn_split) %>% vfold_cv(v = 5)
+```
+
+Now let's define the two models. Let's compare a decision tree at two different tree depths.
+
+```{r}
+tree_recipe <- recipe(churn ~ ., data = mlc_churn)
+tree1 <- decision_tree(mode = "classification", tree_depth = 3)
+tree2 <- decision_tree(mode = "classification", tree_depth = 30)
+
+# Tree 1
+fit_resamples(
+  workflow(preprocessor = tree_recipe, spec = tree1),
+  resamples = churn_resamples
+) %>% collect_metrics()
+
+# Tree 2
+fit_resamples(
+  workflow(preprocessor = tree_recipe, spec = tree2),
+  resamples = churn_resamples
+) %>% collect_metrics()
+```
+
+But that's a lot of copy-and-paste code. `workflow`s give us an easier way:
+
+```{r}
+# Construct a bunch of workflows by applying the same preprocessing recipe to a bunch of different models.
+churn_workflows <- workflow_set(
+  preproc = list(tree_recipe),
+  models = list(shallow = tree1, deeper = tree2))
+churn_workflows
+```
+
+A workflow set is just a data frame of model specifications.
+
+```{r}
+scores <- churn_workflows %>% 
+  workflow_map(
+    fn = "fit_resamples",
+    resamples = churn_resamples
+  )
+```
+
+```{r}
+autoplot(scores, metric = "accuracy") +
+  geom_text(aes(y = mean, label = wflow_id), angle = 90, nudge_x = .05, color = "black")
+```
+
+We see that the deeper tree has higher accuracy.
+
+Use the code area below to try another few models. You might try a different hyperparameter on the decision tree, or a different kind of model entirely.
+
+```{r play-with-params, exercise=TRUE}
+tree_recipe <- recipe(churn ~ ., data = mlc_churn)
+tree1 <- decision_tree(mode = "classification", tree_depth = 3)
+tree2 <- decision_tree(mode = "classification", tree_depth = 30)
+
+# Construct a bunch of workflows by applying the same preprocessing recipe to a bunch of different models.
+churn_workflows <- workflow_set(
+  preproc = list(tree_recipe),
+  models = list(shallow = tree1, deeper = tree2))
+
+# Evaluate all the CV scores.
+scores <- churn_workflows %>% 
+  workflow_map(
+    fn = "fit_resamples",
+    resamples = churn_resamples
+  )
+
+# Plot the results
+autoplot(scores, metric = "accuracy") +
+  geom_text(aes(y = mean, label = wflow_id), angle = 90, nudge_x = .05, color = "black")
+```
+
+## Optional: Automated Tuning
+
+
+```{r tune-glmnet, cache=TRUE}
+# This was created using:
+#usemodels::use_glmnet(churn ~ ., data = mlc_churn)
+glmnet_recipe <- 
+  recipe(formula = churn ~ ., data = mlc_churn) %>% 
+  step_novel(all_nominal_predictors()) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  step_normalize(all_numeric_predictors()) 
+
+glmnet_spec <- 
+  logistic_reg(penalty = tune(), mixture = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
+
+glmnet_workflow <- 
+  workflow() %>% 
+  add_recipe(glmnet_recipe) %>% 
+  add_model(glmnet_spec) 
+
+glmnet_grid <- tidyr::crossing(penalty = 10^seq(-6, -1, length.out = 20), mixture = c(0.05, 
+    0.2, 0.4, 0.6, 0.8, 1)) 
+
+glmnet_tune <- 
+  tune_grid(glmnet_workflow, resamples = churn_resamples, grid = glmnet_grid) 
+
+```
+
+Then we can summarize the results:
+
+```{r}
+collect_metrics(glmnet_tune)
+autoplot(glmnet_tune)
+```
+
+And show just the best ones.
+
+```{r}
+show_best(glmnet_tune)
+```
+
+
+For more details, especially for doing this on many models at once, see [Tidy Modeling with R](https://www.tmwr.org/workflow-sets.html).
+
+
+## Appendix
+
+To run any code chunk from this tutorial in your own environment, use:
+
+```{r ref.label="user-facing-setup", echo=TRUE, eval=FALSE}
+
+```
+

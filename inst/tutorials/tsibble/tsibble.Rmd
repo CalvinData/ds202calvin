@@ -1,0 +1,300 @@
+---
+title: "Time Series Data"
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+library(learnr) # remotes::install_github("rstudio/learnr", build_vignettes = TRUE)
+#library(gradethis) # remotes::install_github("rstudio/gradethis", build_vignettes = TRUE)
+
+knitr::opts_chunk$set(echo = TRUE, comment = "")
+#gradethis_setup()
+#tutorial_options(exercise.reveal_solution = TRUE)
+
+# https://bookdown.org/yihui/rmarkdown-cookbook/reuse-chunks.html#embed-chunk
+<<user-facing-setup>>
+```
+
+
+```{r user-facing-setup, include=FALSE}
+library(tidyverse)
+library(tsibble)
+library(lubridate)
+library(fpp3)
+theme_set(theme_bw())
+
+<<def-weather1>>
+<<as_tsibble-solution>>
+<<def-daily_weather>>
+<<def-weather3>>
+<<def-weather4>>
+```
+
+
+## Examples
+
+Here are a few examples of time-series data we might work with:
+
+```{r}
+simple_example <- tsibble(
+  Year = 2015:2020,
+  Observation = c(59, 20, 91, 44, 56, 12),
+  index = Year)
+simple_example
+```
+
+```{r}
+olympic_running
+```
+
+```{r}
+ansett
+```
+
+
+
+```{r}
+PBS
+```
+
+
+
+##  `tsibbles`: the Index
+
+A time series is a collection of data indexed by time. For example, let's look at some weather data:
+
+```{r def-weather1}
+weather1 <- nycflights13::weather %>%
+  filter(origin == "EWR") %>% 
+  select(origin, time_hour, temp)
+```
+
+
+```{r}
+weather1
+```
+
+This is a `tibble`, which is adequate for storing time series data. But `t`**`s`**`ibble` (*time series* tibble) gives us some useful extra features.
+
+We convert a `tibble` into a `tsibble` by specifying which variable is the `index`
+
+```{r as_tsibble, exercise=TRUE}
+weather2 <- as_tsibble(weather1, index = ____)
+weather2
+```
+
+```{r as_tsibble-solution, exercise.eval=TRUE}
+weather2 <- as_tsibble(weather1, index = time_hour)
+weather2
+```
+
+We can now easily plot that:
+
+```{r}
+autoplot(weather2)
+```
+
+Notice how the x axis label shows that the measurements are taken every *hour* (`[1h]`). *What if we want the daily highs and lows?*
+
+## Aggregating: Daily Highs and Lows
+
+Let's look at an example timestamp.
+
+```{r}
+example_time <- ymd_hms("2022-03-14 01:59:26")
+example_time
+```
+
+If we want to look at everything that happens on that day, we need to identify which *date* that timestamp falls on:
+
+```{r}
+as_date(example_time)
+```
+
+So new we can re-*index* by that date. Note two *syntax quirks*: we need to use ` ~ as_date` not just `as_date`, and we use `.` to refer to the *existing* index:
+
+```{r def-daily_weather}
+daily_weather <- weather2 %>% 
+  index_by(date = ~ as_date(.)) %>% 
+  summarize(
+    temp_high = max(temp, na.rm = TRUE) # ignore missing values
+  )
+daily_weather
+```
+
+Exercise: plot the highest temperatures every *month* (use `yearmonth` to extract months, then `autoplot`).
+
+```{r plot-high-temp, exercise=TRUE}
+weather2 %>% 
+  index_by(date = ~ as_date(.)) %>% 
+  summarize(
+    temp_high = max(temp, na.rm = TRUE)
+  )
+```
+
+```{r plot-high-temp-solution}
+# Could do ...
+weather2 %>% 
+  index_by(month = ~ yearmonth(.)) %>% 
+  summarize(
+    temp_high = max(temp, na.rm = TRUE)
+  ) %>% 
+  autoplot(.vars = vars(temp_high))
+
+# or:
+daily_weather %>% 
+  index_by(month = ~ yearmonth(.)) %>% 
+  summarize(
+    temp_high = max(temp_high, na.rm = TRUE)
+  ) %>% 
+  autoplot(.vars = vars(temp_high))
+```
+
+
+```{r include=FALSE}
+weather2 %>% 
+  index_by(date = ~ as_date(.)) %>% 
+  summarize(
+    temp_high = max(temp),
+    temp_low = min(temp)
+  ) %>% 
+#  autoplot(.vars = vars(temp_high, temp_low))
+  pivot_longer(cols = c(temp_high, temp_low)) %>% 
+  autoplot()
+```
+
+<!-- FIXME: Maybe a different exercise to avoid the pivot_longer? -->
+
+## Sampling intervals
+
+<!-- FIXME: is that term correct? -->
+
+Time series can be sampled at different intervals. The weather data is hourly:
+
+```{r}
+tsibble::interval(weather2)
+```
+
+The daily weather was every 1 day:
+
+```{r}
+tsibble::interval(daily_weather)
+```
+
+Monthly data was every month:
+
+```{r}
+weather2 %>% index_by(month = ~ yearmonth(.)) %>% tsibble::interval()
+```
+
+But Olympic results are every 4 years:
+
+```{r}
+olympic_running %>% tsibble::interval()
+```
+
+
+To represent intervals of time, `tsibble` provides additional types. It uses standard types for days and sub-day units, though; you can use `lubridate` methods to make those:
+
+```{r}
+tsibble::yearmonth("2019 Jan") %>% class()
+lubridate::ymd("2019-01-01") %>% class()
+```
+
+
+## Multiple variables in a time series
+
+Weather stations give us not just temperature but other important factors too. We can store these as a time series, but now with several variables.
+
+```{r def-weather3}
+weather3 <- nycflights13::weather %>% 
+  filter(origin == "EWR") %>% 
+  select(time_hour, temp, humid, precip) %>% 
+  as_tsibble(index = time_hour)
+weather3
+```
+
+```{r}
+# TODO EXERCISE: total precipitation each month?
+```
+
+## A `tsibble` is *tidy*
+
+What about if we want to work with the weather in several different places? The *time* index will hopefully be the same, but there will be multiple *observations* at each time.
+
+The `nycflights13::weather` data actually has three different airports:
+
+```{r}
+nycflights13::weather %>% count(origin)
+```
+
+If we try to make a `tsibble` out of this, we get an error:
+
+```{r error=TRUE}
+weather4 <- nycflights13::weather %>% 
+  select(origin, time_hour, temp, humid, precip) %>% 
+  as_tsibble(index = time_hour)
+weather4
+```
+
+The problem is that there are times with multiple observations. We need to use a *key* to distinguish them.
+
+```{r def-weather4}
+weather4 <- nycflights13::weather %>% 
+  select(origin, time_hour, temp, humid, precip) %>% 
+  as_tsibble(index = time_hour,
+             key = origin) #<< "origin" distinguishes the multiple observations at the same time.
+weather4
+```
+
+The rule is that *each observation should be uniquely identified by index and key* (see the tsibble introductory vignette).
+
+Now we can plot:
+
+```{r}
+weather4 %>% autoplot()
+```
+
+Often, plotting can reveal data issues. For example, it looks like there's an erroneous value in the JFK data. Let's go find it. *You may find this to be a helpful syntax reference for working with times*.
+
+```{r}
+weather4 %>% filter(temp < 15, time_hour > ymd("2013-04-01"), time_hour < ymd("2013-07-01"))
+# Note: the `between` function doesn't work here. I don't know why. 
+```
+
+We can confirm that the value is incorrect by looking at [historical weather data](https://www.wunderground.com/history/daily/us/ny/new-york-city/KLGA/date/2013-5-8), or by comparing it with the temperature at other nearby airports:
+
+*Note*: If I don't specify `tz`, I get a different hour. Why do you think that is?
+
+```{r}
+weather4 %>% filter(time_hour == ymd_hms("2013-05-08 22:00:00", tz = "America/New_York"))
+```
+
+You can play with this data here:
+
+```{r play-with-weather4, exercise=TRUE}
+weather4 %>% filter(time_hour == ymd_hms("2013-05-08 22:00:00", tz = "UTC"))
+```
+
+
+
+## Implicit grouping
+
+`tsibble`s are implicitly grouped by their time index.
+
+```{r}
+olympic_running
+olympic_running %>% summarize(m = mean(Time))
+olympic_running %>% group_by(Length) %>% summarize(m = mean(Time))
+```
+
+
+## Appendix
+
+To run any code chunk from this tutorial in your own environment, use:
+
+```{r ref.label="user-facing-setup", echo=TRUE, eval=FALSE}
+
+```
+

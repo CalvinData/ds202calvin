@@ -1,0 +1,291 @@
+---
+title: "Prediction with Trees"
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+# this is taken from https://cs.calvin.edu/courses/data/202/21fa/ex/ex07/ex07-modeling-inst.html
+library(learnr) # remotes::install_github("rstudio/learnr", build_vignettes = TRUE)
+knitr::opts_chunk$set(echo = TRUE, comment = "")
+tutorial_options(exercise.reveal_solution = FALSE)
+
+# https://bookdown.org/yihui/rmarkdown-cookbook/reuse-chunks.html#embed-chunk
+<<user-facing-setup>>
+```
+
+
+```{r user-facing-setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+theme_set(theme_bw())
+options(scipen = 5) # encourage metrics to print in fixed-point notation
+options(dplyr.summarise.inform = FALSE) # silence a warning message
+
+
+<<load-and-subset-data>>
+<<train-test-split>>
+<<fit-dt-ames>>
+<<fit-linreg-ames>>
+<<make-train-predictions>>
+```
+
+
+<!-- TODO: do a classification tree here too! -->
+
+## Introduction
+
+The goal of this exercise is to start getting familiar with modeling using *decision trees*. We'll try the same *regression* task that we saw in the slides,
+and we'll use a *decision tree* model just like we did there.
+
+Topics:
+
+- How do decision trees make predictions?
+- How do they handle continuous and categorical features?
+- How does the tree change when different features are available?
+- How does the tree change when the maximum allowed depth changes?
+
+
+## Getting started
+
+We'll be using the Ames home sales dataset that we saw in the slides
+If you're curious, you can look at the [Data dictionary](http://jse.amstat.org/v19n3/decock/DataDocumentation.txt)
+that the author provided.
+In the [original paper](http://jse.amstat.org/v19n3/decock.pdf), 
+the author suggests working with a
+subset of the data. So let's do that, and we also change the *units* of sale price to be in *thousands of dollars*
+so the numbers aren't so huge.
+
+```{r load-and-subset-data}
+# Get the data from the "modeldata" package, which comes with tidymodels.
+ames <- read_builtin("ames", package = "modeldata") %>% 
+  filter(Gr_Liv_Area < 4000, Sale_Condition == "Normal") %>% 
+  mutate(Sale_Price = Sale_Price / 1000)
+```
+
+
+### Hold out some unseen data
+
+> NOTE: this is *exactly the same* as what we did last week.
+
+Remember that our goal is to be able to *predict* what homes will sell for *before* they're sold.
+
+But our dataset has only homes that were already sold. How can we possibly figure out how well we'd predict a sale price *before* it's sold?
+
+Our strategy, which we'll discuss more in future weeks, will be to *hold out* a "testing set" of homes.
+We won't let our model see the actual sale price for these homes.
+
+The homes where we do show the model the sale price we'll call the "training" homes.
+
+We'll make this split randomly but consistently: we'll first *seed* the random number generator so it always gives the same sequence of numbers.
+
+```{r train-test-split}
+set.seed(1234)
+
+# Split our data randomly
+ames_split <- initial_split(ames, prop = 2/3) 
+ames_train <- training(ames_split)
+ames_test <- testing(ames_split)
+```
+
+**Exercise**: Use `nrow` to verify that the training set is about two-thirds of the data.
+
+```{r check-dataset-size, exercise=TRUE}
+
+```
+
+```{r check-dataset-size-solution, include=FALSE}
+nrow(ames_train) / nrow(ames)
+```
+
+**Exercise**: Did `initial_split` shuffle the data before it split it? Use `head()` to look at the first few rows of `ames` and of the two splits. (The point here is to look at the results.)
+
+```{r shuffled, exercise=TRUE}
+head(ames)
+head(ames_train)
+head(ames_test)
+```
+
+
+
+### Construct a model specification
+
+As a reminder, the basic `tidymodels` interface is
+
+> `fit(model_spec, formula, data)`
+
+- `model_spec`: the kind of model we want to fit. We'll use a `decision_tree` in `regression` mode. We'll tell it we want trees that are at most 3 levels deep.
+- `formula`
+  - this goes *thing-to-predict* `~` *var1* `+` *var2* `+` ...
+  - In our case, well use `Gr_Liv_Area` and `Bldg_Type` to predict `Sale_Price`.
+- `data`: we'll give the tree-builder our *training* data to use to try to find a good tree.
+
+The result is a *model* object, which can make predictions for us.
+We'll see an example on the next page.
+
+## Interpreting Decision-Tree Fitting
+
+```{r fit-and-show-tree, exercise=TRUE}
+decision_tree_fit <- fit(
+  decision_tree(mode = "regression", tree_depth = 3),
+  
+  Sale_Price ~ Gr_Liv_Area + Bldg_Type,
+  
+  data = ames_train)
+
+# First, show the tree textually
+decision_tree_fit
+
+# Then, show the tree graphically
+decision_tree_fit %>% 
+  extract_fit_engine() %>% 
+  rpart.plot::rpart.plot(roundint = FALSE)
+```
+
+To interpret this diagram, remember that a decision tree puts each item (home, in this case) in a bucket. The diagram shows a **bubble for each bucket**:
+
+- The **lower number** in the bubble shows the *number of items* in that bucket (as a *percentage* of the full training set size).
+- The **upper number** in the bubble shows the *average* value of the response variable for those items.
+
+**Exercises**:
+
+1. How many groups does the tree divide the data into? Look at the plot above; don't write any code.
+2. What would the tree predict for a duplex with 1400 sq ft above-grade living area (`Gr_Liv_Area`)? Do this without writing any code; just look at the tree.
+3. What would the tree predict for a single-family home with 2000 sq ft above-grade living area (`Gr_Liv_Area`)?
+4. Change the tree depth to 5. Did your answers to any of the previous questions change? Why or why not?
+5. Add some additional features to the model. How does the tree change? Try changing the depth again. How does the tree change now?
+
+Some interesting features might be `Year_Built`,  `Latitude` or `Longitude`, or the number of `Bedroom_AbvGr`. Here's the full list:
+
+```{r}
+names(ames_train)
+```
+
+### Another way of visualizing trees
+
+The slides use a different kind of plot for trees, but it shows the same information. The code is unfortunately more messy, but you're welcome to use it.
+
+```{r fit-and-show-tree-party, exercise=TRUE}
+decision_tree_fit <- fit(
+  decision_tree(mode = "regression", tree_depth = 3),
+  Sale_Price ~ Gr_Liv_Area + Bldg_Type,
+  data = ames_train)
+
+# repair_call needed: https://github.com/tidymodels/tidymodels.org/issues/174
+library(partykit)
+plot(as.party(repair_call(decision_tree_fit, ames_train)$fit))
+```
+
+
+## Evaluating Trees
+
+Let's see what the model predicts. We'll use the following model:
+
+```{r fit-dt-ames}
+tree_1 <- fit(
+  decision_tree(mode = "regression", tree_depth = 3),
+  Sale_Price ~ Gr_Liv_Area + Bldg_Type,
+  data = ames_train)
+tree_1
+```
+
+We'll compare it against this linear regression model (note how the code is *almost identical*):
+
+```{r fit-linreg-ames}
+linreg_1 <- fit(
+  linear_reg(),
+  Sale_Price ~ Gr_Liv_Area + Bldg_Type,
+  data = ames_train)
+```
+
+
+We can use the same `augment` workflow that we used with linear regression:
+
+```{r make-train-predictions}
+tree_1_predictions <- augment(tree_1, ames_train)
+linreg_1_predictions <- augment(linreg_1, ames_train)
+```
+
+Let's see what *values* the model predicted. **Make a histogram of the predicted values (which are stored in the `.pred` variable)**. Use `bins = 100` or even more.
+
+```{r pred-histogram, exercise=TRUE}
+ggplot(tree_1_predictions, ___) + ___
+```
+
+```{r pred-histogram-solution}
+ggplot(tree_1_predictions, aes(x = .pred)) + geom_histogram(bins = 100)
+
+```
+
+**How many (non-zero) vertical bars do you see? How many bars would you expect to see in light of what you saw about the model's internals earlier?** Note the `*`s in the textual description of the model above.
+
+**How does this histogram compare with what you'd get from the `linreg_1_predictions`?**
+
+### Plotting Predictions in "Data Space"
+
+Here's some plots we made in the slides; I don't expect you to use this code yourself because in general our models will have too many features to be able to make a plot like this. But I think it's helpful for getting an intuition about what the model is doing.
+
+```{r sweep-tree-model}
+sweep_model <- function(model, ...) {
+  X <- expand_grid(...)
+  model %>% 
+    predict(X) %>% 
+    bind_cols(X)
+}
+
+ggplot(ames_train, aes(x = Gr_Liv_Area, y = Sale_Price)) +
+  geom_point(data = select(ames_train, -Bldg_Type), size = .5, alpha = .025) +
+  geom_point(alpha = .5, size = .5, color = "blue") +
+  geom_line(data = sweep_model(
+      tree_1,
+      Gr_Liv_Area = seq(0, 4000, length.out = 500),
+      Bldg_Type = levels(ames_train$Bldg_Type)
+    ),
+    mapping = aes(y = .pred),
+    color = "red") +
+  facet_wrap(vars(Bldg_Type)) +
+  labs(x = "Living Area", y = "Sale Price ($1k)")
+```
+
+Compare this with the linear regression model:
+
+```{r sweep-linreg-model}
+ggplot(ames_train, aes(x = Gr_Liv_Area, y = Sale_Price)) +
+  geom_point(data = select(ames_train, -Bldg_Type), size = .5, alpha = .025) +
+  geom_point(alpha = .5, size = .5, color = "blue") +
+  geom_line(data = sweep_model(
+      linreg_1,
+      Gr_Liv_Area = seq(0, 4000, length.out = 500),
+      Bldg_Type = levels(ames_train$Bldg_Type)
+    ),
+    mapping = aes(y = .pred),
+    color = "red") +
+  facet_wrap(vars(Bldg_Type)) +
+  labs(x = "Living Area", y = "Sale Price ($1k)")
+
+```
+
+*How would you describe, intuitively, the difference between the two models*?
+
+### Evaluating Predictions Quantitatively
+
+In light of the previous section, which model do you think will have a lower MAE?
+
+Here's the code for computing the MAE of our linear regression model. Modify it to compute the MAE of both models.
+
+```{r compute-error, exercise=TRUE}
+linreg_1_predictions %>% 
+  mutate(error = Sale_Price - .pred) %>% 
+  summarize(mean(abs(error)))
+```
+
+
+## Appendix
+
+
+To run any code chunk from this tutorial in your own environment, use:
+
+```{r ref.label="user-facing-setup", echo=TRUE, eval=FALSE}
+
+```
+

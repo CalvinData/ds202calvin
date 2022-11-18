@@ -1,0 +1,167 @@
+---
+title: "Random Forests and other Ensemble Models"
+output: learnr::tutorial
+runtime: shiny_prerendered
+---
+
+```{r setup, include=FALSE}
+# this is taken from https://cs.calvin.edu/courses/data/202/21fa/ex/ex07/ex07-modeling-inst.html
+library(learnr) # remotes::install_github("rstudio/learnr", build_vignettes = TRUE)
+knitr::opts_chunk$set(echo = TRUE, comment = "")
+tutorial_options(exercise.reveal_solution = FALSE)
+
+# https://bookdown.org/yihui/rmarkdown-cookbook/reuse-chunks.html#embed-chunk
+<<user-facing-setup>>
+```
+
+
+```{r user-facing-setup, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(modelr)
+
+theme_set(theme_bw())
+options(scipen = 5) # encourage metrics to print in fixed-point notation
+options(dplyr.summarise.inform = FALSE) # silence a warning message
+
+<<load-and-subset-data>>
+```
+
+
+## Introduction
+
+Two goals here:
+
+1. Explore how random forests and gradient boosting improve on basic tree models.
+2. Explore all of these models as used for classification
+
+```{r load-and-subset-data, include=FALSE}
+set.seed(1234)
+
+data(ames, package = "modeldata")
+ames <- ames %>% 
+  filter(Gr_Liv_Area < 4000, Sale_Condition == "Normal") %>% 
+  mutate(Sale_Price = Sale_Price / 1000)
+
+# Split our data randomly
+set.seed(364)
+
+ames_split <- initial_split(ames, prop = 0.8)
+ames_train <- training(ames_split)
+ames_test <- testing(ames_split)
+
+library(NHANES)
+people <- NHANES %>%
+  select(Age, BMI, Diabetes) %>% 
+  drop_na()
+
+people_split <- initial_split(people, prop = 0.8)
+people_train <- training(people_split)
+people_test <- testing(people_split)
+```
+
+
+## Try different models for regression
+
+```{r regression-models, exercise=TRUE}
+spec <- linear_reg()
+#spec <- decision_tree(mode = "regression")
+#spec <- rand_forest(mode = "regression")
+#spec <- boost_tree(mode = "regression")
+model_fit <- fit(
+  spec,
+  Sale_Price ~ Gr_Liv_Area + Bldg_Type,
+  data = ames_train)
+
+# Plot how the model's predictions change as living area changes.
+# Overlay the test set data.
+augment(
+  model_fit,
+  data_grid(ames, Gr_Liv_Area = seq_range(Gr_Liv_Area, 500), Bldg_Type = levels(ames$Bldg_Type))) %>% 
+  ggplot(aes(x = Gr_Liv_Area, y = .pred, color = Bldg_Type)) +
+    geom_line() + 
+    geom_point(aes(y = Sale_Price), data = ames_test, alpha = 0.5)
+
+# Measure test-set error.
+augment(model_fit, ames_test) %>% metrics(truth = Sale_Price, estimate = .pred)
+```
+
+**Exercises**:
+
+1. Run the cell as-is and interpret the plot: what prediction does the model make for a living area of 2000 square feet? (What additional piece of information do you need to know to answer this question?) 
+2. What do you notice about the shape of the predictions made by this model?
+3. Replace `linear_reg` by `decision_tree` by commenting and uncommenting the `spec` assignments accordingly. Repeat the first two questions. **What do you notice about the differences between the models**? Think about how those differences relate to how each model makes a prediction.
+4. Replace `decision_tree` by  `rand_forest`; repeat the previous question.
+5. Same, for `boost_tree`.
+6. Domain knowledge about homes might lead us to insist that, all else being equal, increasing the living area will increase the sale price.
+   - Consider the different models fit here. Which models are most and least consistent with that real-world knowledge?
+   - Aside: Why might it be accurate and appropriate for a model to predict a decrease in sale price for some increases in living area? Think about the ways that *not all is equal*.
+
+In this example, you might notice that the linear regression actually gets least error. After reflecting on the last question you can probably see why. You might try adding some other features to the formula; does linear regression still win? (You'll need to comment out the plotting code if you want to try that, though.)
+
+## Classification
+
+Now we'll switch to an example from the book, which uses data about diabetes; read the [explanation there](https://mdsr-book.github.io/mdsr2e/ch-modeling.html#sec:diabetes).
+
+```{r clf-models, exercise=TRUE}
+spec <- logistic_reg()
+#spec <- decision_tree(mode = "classification", cost_complexity = .005)
+#spec <- rand_forest(mode = "classification")
+#spec <- boost_tree(mode = "classification")
+model_fit <- fit(
+  spec,
+  Diabetes ~ BMI + Age,
+  data = people_train)
+
+# Show the model in "data space".
+augment(
+  model_fit,
+  data_grid(
+    people,
+    Age = seq_range(Age, 100),
+    BMI = seq_range(BMI, 100)
+  )
+) %>% 
+  ggplot(aes(x = Age, y = BMI)) +
+  geom_tile(aes(fill = .pred_Yes), color = NA) +
+  geom_count(aes(color = Diabetes), data = people, alpha = 0.3) +
+  scale_fill_gradient("Prob of\nDiabetes", low = "white", high = "red") +
+  scale_color_manual(values = c("gold", "black"))
+
+# Measure test-set error.
+confusion <- augment(model_fit, people_test) %>% conf_mat(truth = Diabetes, estimate = .pred_class)
+summary(confusion)
+```
+
+As before, comment and uncomment the `spec`s to compare the models and think about how the shape of the predictions relates to the structure of the model.
+
+```{r include=FALSE, eval=FALSE}
+#spec <- logistic_reg()
+#spec <- decision_tree(mode = "classification", cost_complexity = .005)
+spec <- rand_forest(mode = "classification")
+#spec <- boost_tree(mode = "classification")
+model_fit <- fit(
+  spec,
+  Diabetes ~ BMI + AgeDecade,
+  data = people)
+
+# Plot how the model's predictions change as living area changes.
+# Overlay the test set data.
+sweep_model(model_fit, BMI, range(people$BMI), AgeDecade = levels(people$AgeDecade)) %>% 
+  ggplot(aes(x = BMI, y = .pred_Yes, color = AgeDecade)) +
+    geom_line()
+    #geom_point(aes(y = frac), data = people %>% group_by() %>% summarize(frac = mean(Diabetes == "Yes")), alpha = 0.5)
+
+# Measure test-set error.
+augment(model_fit, people) %>% conf_mat(truth = Diabetes, estimate = .pred_class)
+```
+
+
+## Appendix
+
+To run any code chunk from this tutorial in your own environment, use:
+
+```{r ref.label="user-facing-setup", echo=TRUE, eval=FALSE}
+
+```
+
